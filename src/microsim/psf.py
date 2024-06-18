@@ -1,19 +1,24 @@
 from __future__ import annotations
 
+import logging
+import os
 from functools import cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import numpy.typing as npt
 import tqdm
+from pint import Quantity
 
 from microsim.schema.backend import NumpyAPI
 from microsim.schema.lens import ObjectiveKwargs, ObjectiveLens
+from microsim.util import microsim_cache
 
 from ._data_array import ArrayProtocol
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from microsim._data_array import ArrayProtocol
     from microsim.schema.optical_config import OpticalConfig
@@ -346,12 +351,14 @@ def make_psf(
     space: SpaceProtocol,
     channel: OpticalConfig,
     objective: ObjectiveLens,
+    em_wvl: Quantity | None = None,
     pinhole_au: float | None = None,
     max_au_relative: float | None = None,
     xp: NumpyAPI | None = None,
 ) -> ArrayProtocol:
     nz, _ny, nx = space.shape
     dz, _dy, dx = space.scale
+
     ex = channel.excitation
     em = channel.emission
     if ex is None:
@@ -363,13 +370,16 @@ def make_psf(
     if em is None:
         em = ex
 
+    if em_wvl is None:
+        em_wvl = cast(Quantity, em.center_wave())
+
     return cached_psf(
         nz=nz,
         nx=nx,
         dx=dx,
         dz=dz,
         ex_wvl_um=ex.center_wave().to("um").magnitude,
-        em_wvl_um=em.center_wave().to("um").magnitude,
+        em_wvl_um=em_wvl.to("um").magnitude,
         objective=_cast_objective(objective),
         pinhole_au=pinhole_au,
         max_au_relative=max_au_relative,
@@ -401,6 +411,15 @@ def cached_psf(
         if nx % 2 == 0:
             nx += 1
 
+    use_cache = os.getenv("MICROSIM_CACHE", "").lower() not in {"0", "false", "no", "n"}
+    if use_cache:
+        cache_path = _psf_cache_path(
+            nz, nx, dz, dx, em_wvl_um, pinhole_au, ex_wvl_um, objective
+        )
+        if cache_path.exists():
+            logging.info("Using cached PSF: %s", cache_path)
+            return xp.asarray(np.load(cache_path))
+
     if pinhole_au is None:
         psf = vectorial_psf_centered(
             wvl=em_wvl_um,
@@ -424,4 +443,26 @@ def cached_psf(
             xp=xp,
         )
 
+    if use_cache:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(cache_path, psf)
     return xp.asarray(psf)
+
+
+def _psf_cache_path(
+    nz: int,
+    nx: int,
+    dz: float,
+    dx: float,
+    em_wvl_um: float,
+    pinhole_au: float | None,
+    ex_wvl_um: float,
+    objective: ObjectiveLens,
+) -> Path:
+    """Return the cache location for these PSF parameters."""
+    cache_key = [nz, nx, dz, dx, em_wvl_um]
+    if pinhole_au is not None:
+        cache_key.extend([ex_wvl_um, pinhole_au])
+    cache_path = microsim_cache("psf") / objective.cache_key()
+    cache_path = cache_path / "_".join([str(x).replace(".", "-") for x in cache_key])
+    return cache_path.with_suffix(".npy")

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import itertools
+import shutil
 import warnings
-from typing import TYPE_CHECKING, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast
+from urllib import parse, request
+from urllib.error import HTTPError
 
 import numpy as np
 import numpy.typing as npt
+import platformdirs
 import tqdm
 from scipy import signal
 
@@ -13,11 +17,40 @@ from ._data_array import ArrayProtocol, DataArray, xrDataArray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
+    from pathlib import Path
     from typing import Literal
 
     from numpy.typing import DTypeLike, NDArray
 
     ShapeLike = Sequence[int]
+
+
+# don't use this directly... it's patched during tests
+# use cache_path() instead
+_MICROSIM_CACHE = platformdirs.user_cache_path("microsim")
+
+
+def microsim_cache(subdir: Literal["psf", "ground_truth"] | None = None) -> Path:
+    """Return the microsim cache path.
+
+    If `subdir` is provided, return the path to the specified subdirectory.
+    (We use literal here to ensure that only the specified values are allowed.)
+    """
+    if subdir:
+        return _MICROSIM_CACHE / subdir
+    return _MICROSIM_CACHE
+
+
+def clear_cache(pattern: str | None = None) -> None:
+    """Clear the microsim cache."""
+    if pattern:
+        for p in microsim_cache().glob(pattern):
+            if p.is_file():
+                p.unlink()
+            else:
+                shutil.rmtree(p, ignore_errors=True)
+    else:
+        shutil.rmtree(microsim_cache(), ignore_errors=True)
 
 
 def uniformly_spaced_coords(
@@ -216,26 +249,91 @@ def tiled_convolve(
 
 # convenience function we'll use a couple times
 def ortho_plot(
-    img: ArrayProtocol, gamma: float = 0.5, mip: bool = False, cmap: str = "gray"
+    img: ArrayProtocol,
+    gamma: float = 0.5,
+    mip: bool = False,
+    cmap: str | list[str] | None = None,
+    *,
+    title: str | None = None,
+    show: bool = True,
 ) -> None:
     """Plot XY and XZ slices of a 3D array."""
     import matplotlib.pyplot as plt
-    from matplotlib.colors import PowerNorm
+    from matplotlib.colors import LinearSegmentedColormap
 
+    if isinstance(img, xrDataArray):
+        img = img.data
     if hasattr(img, "get"):
         img = img.get()
     img = np.asarray(img).squeeze()
-    if img.ndim != 3:
-        raise ValueError("Input must be a 3D array")
+    cmap = [cmap] if isinstance(cmap, str) else cmap
+    if img.ndim == 3:
+        channels = [img]
+        cm_list = cmap if cmap is not None else ["gray"]
+    elif img.ndim == 4:
+        channels = list(img)
+        colors = ["green", "magenta", "cyan", "yellow", "red", "blue"]
+        cm_list = cmap if cmap is not None else colors
+    else:
+        raise ValueError("Input must be a 3D or 4D array")
 
-    _, ax = plt.subplots(ncols=2, figsize=(10, 5))
-    xy = img.max(axis=0) if mip else img[img.shape[0] // 2]
-    xz = img.max(axis=1) if mip else img[:, img.shape[1] // 2]
-    ax[0].imshow(xy, norm=PowerNorm(gamma), cmap=cmap)
-    ax[1].imshow(xz, norm=PowerNorm(gamma), cmap=cmap)
+    # Initialize RGB images for xy and xz
+    xy_rgb = np.zeros((channels[0].shape[1], channels[0].shape[2], 3))
+    xz_rgb = np.zeros((channels[0].shape[0], channels[0].shape[2], 3))
+
+    fig, ax = plt.subplots(ncols=2, figsize=(10, 5))
+    for img, cmap in zip(channels, cm_list, strict=False):
+        xy = np.max(img, axis=0) if mip else img[img.shape[0] // 2]
+        xz = np.max(img, axis=1) if mip else img[:, img.shape[1] // 2]
+
+        # Normalize the images to the range [0, 1]
+        xy = (xy - xy.min()) / (xy.max() - xy.min())
+        xz = (xz - xz.min()) / (xz.max() - xz.min())
+
+        # Apply gamma correction
+        xy = np.power(xy, 1 / gamma)
+        xz = np.power(xz, 1 / gamma)
+
+        # Convert the grayscale images to RGB using the specified colormap
+        cm = LinearSegmentedColormap.from_list("_cmap", ["black", cmap])
+        xy_rgb += cm(xy)[..., :3]  # Exclude alpha channel
+        xz_rgb += cm(xz)[..., :3]  # Exclude alpha channel
+
+    # Clip the values to the range [0, 1]
+    xy_rgb = np.clip(xy_rgb, 0, 1)
+    xz_rgb = np.clip(xz_rgb, 0, 1)
+
+    ax[0].imshow(xy_rgb)
+    ax[1].imshow(xz_rgb)
     ax[0].set_title("XY slice")
     ax[1].set_title("XZ slice")
-    plt.show()
+    try:
+        fig.set_layout_engine("tight")
+    except AttributeError:
+        fig.set_tight_layout(True)
+
+    if title:
+        fig.suptitle(title)
+    if show:
+        plt.show()
+
+
+def ndview(ary: Any, cmap: Any | None = None) -> None:
+    """View any array using ndv.imshow.
+
+    This function is a thin wrapper around `ndv.imshow`.
+    """
+    try:
+        import ndv
+        import qtpy
+        import vispy.app
+    except ImportError as e:
+        raise ImportError(
+            "Please `pip install 'ndv[pyqt,vispy]' to use this function."
+        ) from e
+
+    vispy.use(qtpy.API_NAME)
+    ndv.imshow(ary, cmap=cmap)
 
 
 ArrayType = TypeVar("ArrayType", bound=ArrayProtocol)
@@ -257,3 +355,60 @@ def downsample(
     for d in range(array.ndim):
         reshaped = method(reshaped, -1 * (d + 1), dtype)
     return reshaped
+
+
+def bin_window(
+    array: npt.NDArray,
+    window: int | Sequence[int],
+    dtype: npt.DTypeLike | None = None,
+    method: str | Callable = "sum",
+) -> npt.NDArray:
+    """Bin an nd-array by applying `method` over `window`."""
+    # TODO: deal with xarray
+
+    binwindow = (window,) * array.ndim if isinstance(window, int) else window
+    new_shape = []
+    for s, b in zip(array.shape, binwindow, strict=False):
+        new_shape.extend([s // b, b])
+
+    sliced = array[
+        tuple(slice(0, s * b) for s, b in zip(new_shape[::2], binwindow, strict=True))
+    ]
+    reshaped = np.reshape(sliced, new_shape)
+
+    if callable(method):
+        f = method
+    elif method == "mode":
+        # round and cast to int before calling bincount
+        reshaped = np.round(reshaped).astype(np.int32, casting="unsafe")
+
+        def f(a: npt.NDArray, axis: int) -> npt.NDArray:
+            return np.apply_along_axis(lambda x: np.bincount(x).argmax(), axis, a)
+    else:
+        f = getattr(np, method)
+    axes = tuple(range(1, reshaped.ndim, 2))
+    result = np.apply_over_axes(f, reshaped, axes).squeeze()
+    if dtype is not None:
+        result = result.astype(dtype)
+    return result
+
+
+def norm_name(name: str) -> str:
+    """Normalize a name to something easily searchable."""
+    name = str(name).lower()
+    for char in " -/\\()[],;:!?@#$%^&*+=|<>'\"":
+        name = name.replace(char, "_")
+    return name
+
+
+def http_get(url: str, params: dict | None = None) -> bytes:
+    """API like requests.get but with standard-library urllib."""
+    if params:
+        url += "?" + parse.urlencode(params)
+
+    with request.urlopen(url) as response:
+        if not 200 <= response.getcode() < 300:
+            raise HTTPError(
+                url, response.getcode(), "HTTP request failed", response.headers, None
+            )
+        return cast(bytes, response.read())

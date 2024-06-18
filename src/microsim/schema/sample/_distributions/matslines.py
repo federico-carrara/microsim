@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
-from microsim.schema._base_model import SimBaseModel
 from microsim.schema.backend import NumpyAPI
+from microsim.schema.sample._distributions._base import _BaseDistribution
 
 if TYPE_CHECKING:
     import numpy.typing as npt
@@ -13,12 +13,16 @@ if TYPE_CHECKING:
     from microsim._data_array import xrDataArray
 
 
-class MatsLines(SimBaseModel):
+class MatsLines(_BaseDistribution):
     type: Literal["matslines"] = "matslines"
     density: float = 1
     length: int = 10
     azimuth: int = 10
     max_r: float = 0.9
+
+    def cache_path(self) -> tuple[str, ...] | None:
+        data = self.model_dump(mode="json").items()
+        return ("matslines", *(f"{k}_{v}" for k, v in data if k != "type"))
 
     def _gen_vertices(
         self, xp: NumpyAPI, shape: tuple[int, ...], xypad: int = 1, zpad: int = 1
@@ -63,21 +67,23 @@ class MatsLines(SimBaseModel):
         if hasattr(c, "get"):
             c = c.get()
         drawlines_bresenham(c, data, self.max_r)
+        # TODO: Multi-fluorophore setup: this addition should be replaced by setting
+        # data in a specific dimension and index of space.
         return space + xp.asarray(data).astype(space.dtype)
 
 
 def drawlines_bresenham(
     segments: npt.NDArray, grid: npt.NDArray, max_r: float = 2.0
 ) -> None:
-    from ._bresenham import bres_draw_segment_2d, bres_draw_segment_3d
+    from microsim._draw import draw_line_2d, draw_line_3d
 
     if grid.ndim == 2:
         for segment in segments:
             y0, x0, y1, x1 = (int(x) for x in segment)
-            bres_draw_segment_2d(x0, y0, x1, y1, grid, max_r)
+            draw_line_2d(x0, y0, x1, y1, grid, max_r)
     elif grid.ndim == 3:
         for segment in segments:
             z0, y0, x0, z1, y1, x1 = (int(x) for x in segment)
-            bres_draw_segment_3d(x0, y0, z0, x1, y1, z1, grid, max_r)
+            draw_line_3d(x0, y0, z0, x1, y1, z1, grid, max_r)
     else:
         raise ValueError(f"grid must be either 2 or 3 dimensional.  Got {grid.ndim}")
