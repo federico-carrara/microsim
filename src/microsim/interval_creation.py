@@ -5,7 +5,7 @@ ensures that the area under the curve is equal for all intervals.
 """
 
 from bisect import bisect_left
-from typing import NamedTuple
+from typing import NamedTuple, Literal
 
 import numpy as np
 
@@ -36,9 +36,60 @@ class Bin(NamedTuple):
             return f"Mode:{self.mode:.2f}"
 
 
-def generate_bins(x: np.ndarray, y: np.ndarray, num_bins: int) -> list[Bin]:
+def generate_bins(
+    x: np.ndarray, 
+    y: np.ndarray, 
+    num_bins: int, 
+    # strategy: Literal["equal_area", "equal_space"]
+) -> list[Bin]:
     """Divide the spectrum into intervals."""
+    # if strategy == "equal_area":
+    #     return _generate_bins_equal_area(x, y, num_bins)
+    # elif strategy == "equal_space":
+    #     return _generate_bins_equal_space(x, num_bins)    
     return _generate_bins_equal_area(x, y, num_bins)
+    
+def _generate_bins_equal_space(
+    x: np.ndarray, 
+    num_bins: int
+) -> list[Bin]:
+    """
+    Split the range of values in x into num_bins equally spaced bins.
+    If len(x) is not divisible by num_bins, the len(x) % num_bins extra elements are distributed to the first len(x) % num_bins bins.
+    """
+    bins = []
+    start = 0
+    bin_size = len(x) // num_bins
+    extra_elements = len(x) % num_bins
+    for i in range(num_bins):
+        extra_element = 1 if i < extra_elements else 0
+        end = start + bin_size + extra_element
+        bins.append(Bin(start=x[start], end=x[end-1]))
+        start = end
+        
+    return bins
+
+
+# def _generate_bins_equal_space(
+#     x: np.ndarray, 
+#     num_bins: int
+# ) -> list[tuple[int, int]]:
+#     """
+#     Split the range of values in x into num_bins equally spaced bins.
+#     If len(x) is not divisible by num_bins, the last bin will have more elements.
+#     """
+#     bins = []
+#     start = 0
+#     bin_size = len(x) // num_bins
+#     for i in range(num_bins):
+#         end = start + bin_size
+#         bins.append(Bin(start=x[start], end=x[end]))
+#         start = end
+        
+#     if bins[-1].end != x[-1]:
+#         bins[-1] = Bin(start=bins[-1].start, end=x[-1])
+        
+#     return bins
 
 
 def _generate_bins_equal_area(x: np.ndarray, y: np.ndarray, num_bins: int) -> list[Bin]:
