@@ -62,7 +62,7 @@ class Simulation(SimBaseModel):
     settings: Settings = Field(default_factory=Settings)
     output_path: OutPath | None = None
     emission_bins: int = 3
-    # binning_strategy: Literal["equal_area", "equal_space"] = "equal_area"
+    spectral_image: bool = False
 
     @classmethod
     def from_ground_truth(
@@ -295,7 +295,12 @@ class Simulation(SimBaseModel):
                 fluor_binned_em = fluor_em.groupby_bins(fluor_em[Axis.W], bins=np.asarray(em_sbins)).sum() 
                 fluor_binned_em_arr.append(fluor_binned_em) # for DEBUGGING
                 fluor_counts = xr.concat(
-                    [fluor_counts * x.values.item() for x in fluor_binned_em],
+                    [
+                        fluor_counts * x.item() 
+                        if not np.isnan(x.item()) # if fluor_em_intensity not defined in the bin, then multiply by 0
+                        else xr.ones_like(fluor_counts)
+                        for x in fluor_binned_em.values
+                    ],
                     dim=Axis.W,
                 )
                 fluor_counts = fluor_counts.assign_coords(
@@ -306,7 +311,6 @@ class Simulation(SimBaseModel):
         emission_flux_data = xr.concat(emission_flux_arr, dim=Axis.F)
         emission_flux_data.attrs.update(unit="photon/sec")
         return emission_flux_data, fluor_em_spectra, fluor_binned_em_arr, 
-        
 
     def optical_image(
         self, emission_flux: xr.DataArray | None = None, *, channel_idx: int = 0
@@ -318,6 +322,7 @@ class Simulation(SimBaseModel):
         result = self.modality.render(
             emission_flux,
             self.channels[channel_idx],
+            retain_spectrum=self.spectral_image,
             objective_lens=self.objective_lens,
             settings=self.settings,
             xp=self._xp,
