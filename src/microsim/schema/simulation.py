@@ -63,6 +63,7 @@ class Simulation(SimBaseModel):
     output_path: OutPath | None = None
     emission_bins: int = 3
     spectral_image: bool = False
+    light_powers: list[float] = Field(default_factory=lambda: [100])
 
     @classmethod
     def from_ground_truth(
@@ -259,13 +260,14 @@ class Simulation(SimBaseModel):
         # Get emission spectra for all the fluorophores
         fluor_em_spectra = []
         fluors = []
-        for fluor_dist in truth.coords[Axis.F].values:
+        for i, fluor_dist in enumerate(truth.coords[Axis.F].values):
             fluor = cast(FluorophoreDistribution, fluor_dist).fluorophore
             fluors.append(fluor)
             if fluor is None:
                 raise  NotImplementedError("Fluorophore must be defined for the moment!")
             else:
-                em_events = get_emission_events(channel, fluor) # This gives the Spectrum for the given fluorophore and channel config (filters etc. etc.)
+                # This gives the Spectrum for the given fluorophore and channel config (filters etc. etc.)
+                em_events = get_emission_events(channel, fluor, light_power=self.light_powers[i]) 
                 fluor_em_spectra.append(em_events)
                 
         # Get the min and max wavelength over all the spectra
