@@ -64,7 +64,7 @@ def clear_cache() -> None:
 def _supabase(url: str | None = None, key: str | None = None) -> supabase.Client:
     if not (url and key):
         with urllib.request.urlopen(
-            "https://openorganelle.janelia.org/static/js/4743.a9f85e14.chunk.js"
+            "https://openorganelle.janelia.org/static/js/8591.066f2952.chunk.js"
         ) as response:
             if response.status != 200:
                 raise ValueError("Failed to fetch Supabase URL and key")
