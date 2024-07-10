@@ -309,8 +309,15 @@ class Simulation(SimBaseModel):
                     w=fluor_binned_em[f"{Axis.W}_bins"].values
                 )               
             emission_flux_arr.append(fluor_counts)
-                
+
         emission_flux_data = xr.concat(emission_flux_arr, dim=Axis.F)
+        # Append the sum over the fluorophores
+        emission_flux_sum = emission_flux_data.sum(dim=Axis.F)
+        emission_flux_sum = emission_flux_sum.expand_dims(Axis.F, axis=2)
+        emission_flux_sum = emission_flux_sum.assign_coords(f=["mixed_spectrum"])
+        emission_flux_data = xr.concat(
+            [emission_flux_data, emission_flux_sum], dim=Axis.F
+        )
         emission_flux_data.attrs.update(unit="photon/sec")
         return emission_flux_data, fluor_em_spectra, fluor_binned_em_arr, 
 
@@ -344,11 +351,11 @@ class Simulation(SimBaseModel):
     ) -> xr.DataArray:
         if optical_image is None:
             optical_image = self.optical_image(channel_idx=channel_idx)
-        image = optical_image
+        image = optical_image # (C, Z, Y, X)
         # TODO:Multi-fluorophore setup: combine information present in all wavelength
         # intervals.
         if self.output_space is not None:
-            image = self.output_space.rescale(image)
+            image = self.output_space.rescale(image) # (C, Z', Y', Z')
         if self.detector is not None and with_detector_noise:
             im_max = self._xp.max(image.data)
             if not np.any(im_max):
@@ -357,7 +364,7 @@ class Simulation(SimBaseModel):
                 photon_flux = image * photons_pp_ps_max / im_max
             gray_values = self.detector.render(
                 photon_flux, exposure_ms=exposure_ms, xp=self._xp
-            )
+            ) # (C, Z', Y', Z')
             image = gray_values
         image.attrs.update(unit="gray values")
         return image
