@@ -275,7 +275,7 @@ class Simulation(SimBaseModel):
         max_wave = max([x.wavelength.magnitude.max() for x in fluor_em_spectra])
         
         # Create the same bins for all the spectra
-        em_range = np.arange(min_wave, max_wave, 1)
+        em_range = np.arange(min_wave, max_wave+1, 1)
         em_bins = _generate_bins_equal_space(em_range, self.emission_bins)
         em_sbins = sorted(set([bins.start for bins in em_bins] + [em_bins[-1].end]))
                 
@@ -349,6 +349,9 @@ class Simulation(SimBaseModel):
         with_detector_noise: bool = True,
         channel_idx: int = 0,
     ) -> xr.DataArray:
+        """
+        'photons_pp_ps_max' = maximum photons per pixel per second (?)
+        """ 
         if optical_image is None:
             optical_image = self.optical_image(channel_idx=channel_idx)
         image = optical_image # (C, Z, Y, X)
