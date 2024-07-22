@@ -9,7 +9,7 @@ from .optical_config import (
     Shortpass,
     SpectrumFilter,
 )
-from .sample import CosemLabel, Fluorophore, FluorophoreDistribution, MatsLines, Sample
+from .sample import CosemLabel, Fluorophore, FluorophoreDistribution, MatsLines, Sample, BioSR
 from .settings import Settings
 from .simulation import Simulation
 from .space import DownscaledSpace, ExtentScaleSpace, ShapeExtentSpace, ShapeScaleSpace
@@ -18,6 +18,7 @@ from .spectrum import Spectrum
 __all__ = [
     "BackendName",
     "Bandpass",
+    "BioSR",
     "Camera",
     "CosemLabel",
     "CameraCCD",

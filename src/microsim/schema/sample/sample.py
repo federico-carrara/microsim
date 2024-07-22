@@ -9,9 +9,10 @@ from microsim.schema.backend import NumpyAPI
 from ._distributions.cosem import CosemLabel
 from ._distributions.direct import FixedArrayTruth
 from ._distributions.matslines import MatsLines
+from ._distributions.biosr import BioSR
 from .fluorophore import Fluorophore
 
-Distribution = MatsLines | CosemLabel | FixedArrayTruth
+Distribution = MatsLines | CosemLabel | BioSR | FixedArrayTruth
 DistributionTypes = get_args(Distribution)
 
 
