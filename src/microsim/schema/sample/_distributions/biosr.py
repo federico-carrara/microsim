@@ -12,7 +12,7 @@ from microsim.schema.sample._distributions._base import _BaseDistribution
 
 NIMGS = {
     "CCPs": 54,
-    "F-Actin": 51,
+    "F-actin": 51,
     "ER": 68,
     "Microtubules": 55,
 }
