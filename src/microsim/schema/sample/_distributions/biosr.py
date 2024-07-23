@@ -2,6 +2,7 @@ import os
 from typing import Literal
 
 import numpy as np
+from pydantic import model_validator
 
 from microsim._data_array import ArrayProtocol, xrDataArray
 from microsim.util import _read_mrc
@@ -9,11 +10,36 @@ from microsim._data_array import xrDataArray
 from microsim.schema.backend import NumpyAPI
 from microsim.schema.sample._distributions._base import _BaseDistribution
 
+NIMGS = {
+    "CCPs": 54,
+    "F-Actin": 51,
+    "ER": 68,
+    "Microtubules": 55,
+}
+
 class BioSR(_BaseDistribution):
     root_dir: str
     label: Literal["CCPs", "ER", "F-actin", "Microtubules"]
-    idx: int | None = None
+    img_idx: int | None = None
     
+    @model_validator(mode="after")
+    def _validate_img_idx(cls, value):
+        if value.img_idx is not None:
+            n_imgs = NIMGS[value.label]
+            if value.img_idx < 0 or value.img_idx >= n_imgs:
+                raise ValueError(
+                    f"Invalid idx: {value.img_idx}. Must be in range [0, {n_imgs})."
+                )
+        return value
+    
+    @property
+    def _idx(self):
+        if self.img_idx is None:
+            n_imgs = NIMGS[self.label]
+            return np.random.randint(n_imgs)
+        else:
+            return self.img_idx
+        
     @classmethod
     def is_random(cls) -> bool:
         """Return True if this distribution generates randomized results."""
@@ -26,17 +52,13 @@ class BioSR(_BaseDistribution):
         )
         fpath = os.path.join(self.root_dir, fname)
         imgs = _read_mrc(fpath) # shape: (X, Y, N)
-        if self.idx is None: # TODO: see how to handle the idx properly
-            self.idx = np.random.randint(imgs.shape[-1])
-        if self.idx >= imgs.shape[-1]:
-            raise ValueError(f"Index {self.idx} out of bounds for {self.label}")
-        img = imgs[:, :, self.idx]
+        img = imgs[:, :, self._idx]
         return img[np.newaxis, ...]
     
     def _map_to_fp_distrib(
         self, 
         data: np.ndarray, 
-        threshold: float = 0.05,
+        threshold: float = 0.1,
         gamma: float = 2.0
     ) -> np.ndarray:
         """Map data from 16bit img to flurophore distribution.
@@ -46,10 +68,12 @@ class BioSR(_BaseDistribution):
         2. Apply a threshold to get rid of background noise
         3. Apply gamma correction (exp) to enhance contrast (hist equaliz??)
         4. Map back to 8bit (0-255)
+        
+        NOTE: threshold is expressed in relative terms (0-1)
         """
+        # data = np.power(data, gamma)
         data = (data - data.min()) / (data.max() - data.min())
         # data[data < threshold] = 0
-        data = np.power(data, gamma)
         data = (data * 255).astype(np.uint8)
         return data
     
