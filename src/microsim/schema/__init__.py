@@ -4,6 +4,7 @@ from .lens import ObjectiveLens
 from .modality import Confocal, Modality, Widefield
 from .optical_config import (
     Bandpass,
+    LightSource,
     Longpass,
     OpticalConfig,
     Shortpass,
@@ -37,6 +38,7 @@ __all__ = [
     "NumpyAPI",
     "ObjectiveLens",
     "OpticalConfig",
+    "LightSource",
     "Sample",
     "Settings",
     "ShapeExtentSpace",
