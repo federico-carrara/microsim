@@ -237,7 +237,10 @@ class Simulation(SimBaseModel):
         return emission_flux_data
     
     def spectral_emission_flux(
-        self, truth: "xr.DataArray | None" = None, *, channel_idx: int = 0
+        self, 
+        truth: "xr.DataArray | None" = None, *, 
+        channel_idx: int = 0,
+        plot_hist: bool = False,
     ) -> xr.DataArray:
         """
         Idea:
@@ -314,14 +317,15 @@ class Simulation(SimBaseModel):
         # NOTE: Before summing over the fluorophores, we'd better check that intensities
         # are not "too different", otherwise we'd have one or more fluorophores 
         # dominating the others.
-        print(
-            "Plotting intensity histograms for all the flurophore...\n"
-            "When the difference is too large, the fluorophore with the highest "
-            "intensity will dominate the others in the mixed spectrum.\n"
-            "If this is the case, consider selecting different light powers "
-            "for the fluorophores."
-        )
-        intensity_histograms(emission_flux_data, "Emission")
+        if plot_hist:
+            print(
+                "Plotting intensity histograms for all the flurophore...\n"
+                "When the difference is too large, the fluorophore with the highest "
+                "intensity will dominate the others in the mixed spectrum.\n"
+                "If this is the case, consider selecting different light powers "
+                "for the fluorophores."
+            )
+            intensity_histograms(emission_flux_data, "Emission")
         # Append the sum over the fluorophores
         emission_flux_sum = emission_flux_data.sum(dim=Axis.F)
         emission_flux_sum = emission_flux_sum.expand_dims(Axis.F, axis=2)
