@@ -1,5 +1,9 @@
-from typing import Literal
+from typing import Literal, Any
+import os
+import datetime
+import json
 
+import tifffile as tiff
 import numpy as np
 import xarray as xr
 
@@ -12,8 +16,8 @@ def create_custom_channel(
 ) -> ms.optical_config.OpticalConfig:
 
     custom_spectrum = ms.Spectrum(
-        wavelength=np.arange(min_wave, max_wave, 1),
-        intensity=np.ones(max_wave - min_wave),
+        wavelength=np.arange(min_wave, max_wave + 1, 1),
+        intensity=np.ones(max_wave - min_wave + 1),
     )
     custom_filter = ms.optical_config.SpectrumFilter(transmission=custom_spectrum) # placement=ALL by default
     custom_channel = ms.optical_config.OpticalConfig(
@@ -99,29 +103,117 @@ def simulate_dataset(
         print("----------------------------------")
         sim = init_simulation(labels, fluorophores, root_dir, light_pwrs, detector_qe)
         sim_imgs.append(run_simulation(sim, detect_exposure)) 
-    return sim_imgs
+        
+    # Create simulation metadata
+    wave_range = [
+       int(sim.channels[0].filters[0].transmission.wavelength[0].magnitude),
+       int(sim.channels[0].filters[0].transmission.wavelength[-1].magnitude),
+    ]
+    sim_metadata = {
+        "structures": labels, 
+        "fluorophores": fluorophores,
+        "shape": list(sim_imgs[0].shape[-3:]),
+        "light_powers": light_pwrs,
+        "downscale": sim.output_space.downscale,
+        "detect_exposure_ms": detect_exposure,
+        "detect_quantum_eff": detector_qe,
+        "wavelength_range": wave_range,
+        "dtype": str(sim_imgs[0].dtype),
+    }
+    return sim_imgs, sim_metadata
 
 def save_simulation_results(
     results: list[xr.DataArray],
     save_dir: str,
+    dtype: Literal["8bit", "16bit"] = "16bit",
 ) -> None:
-    ...
+    print(f"Saving simulated data into {save_dir}...")
+    os.makedirs(save_dir, exist_ok=True)
+    for i, img in enumerate(results):
+        img = img.values
+        img = normalize_image(img, dtype)
+        fname = f"simulated_img_{i+1}.tif"
+        tiff.imwrite(os.path.join(save_dir, fname), img.squeeze()) 
+    
+def save_metadata(
+    img: xr.DataArray,
+    sim_metadata: dict[str, Any],
+    save_dir: str,
+) -> None:
+    """Save Metadata of the simulation."""
+    from microsim.schema.dimensions import Axis
+    print(f"Saving metadata into {save_dir}...")
+    os.makedirs(save_dir, exist_ok=True)
+    w_bins = [
+        (img.coords[Axis.W].values[i].left, img.coords[Axis.W].values[i].right)
+        for i in range(len(img.coords[Axis.W].values))
+    ]
+    coords_info = {
+        "x_coords": img.coords[Axis.X].values.tolist(),
+        "y_coords": img.coords[Axis.Y].values.tolist(),
+        "z_coords": img.coords[Axis.Z].values.tolist(),
+        "w_bins": w_bins,
+    }
+    with open(os.path.join(save_dir, "sim_coords.json"), "w") as f:
+        json.dump(coords_info, f)
+    with open(os.path.join(save_dir, "sim_metadata.json"), "w") as f:
+        json.dump(sim_metadata, f)
+
+
+def get_save_path(root_dir: str) -> str:
+    current_date = datetime.date.today()
+    formatted_date = current_date.strftime("%y%m%d")
+    current_dir = os.path.join(root_dir, formatted_date)
+    return get_unique_directory_path(current_dir)
+
+def get_unique_directory_path(base_path: str) -> str:
+    version = 0
+    new_path = f"{base_path}_v{version}"
+    while os.path.exists(new_path):
+        version += 1
+        new_path = f"{base_path}_v{version}"
+    return new_path
+
+def normalize_image(
+    img: np.ndarray, 
+    dtype: Literal["8bit", "16bit"]
+) -> np.ndarray:
+    """Normalize an image for each flurophore separately.
+    
+    Image has shape (W, F, Z, Y, X).
+    """ 
+    min_vals = np.min(img, axis=(0, -3, -2, -1), keepdims=True)
+    max_vals = np.max(img, axis=(0, -3, -2, -1), keepdims=True)
+    img = (img - min_vals) / (max_vals - min_vals)
+    if dtype == "8bit":
+        return (img * 255).astype(np.uint8)
+    elif dtype == "16bit":
+        return (img * 65535).astype(np.uint16)
+    else:
+        ValueError(f"Invalid dtype: {dtype}. Available options are '8bit' or '16bit'.")
 
 #-------------------------------------------------------------------------------
 
 if __name__ == "__main__":
     ROOT_DIR = "/group/jug/federico/careamics_training/data/BioSR"
+    SAVE_DIR = "/group/jug/federico/microsim/BIOSR_spectral_data"
 
     import matplotlib.pyplot as plt
 
-    res = simulate_dataset(
+    res, sim_metadata = simulate_dataset(
         labels=["ER", "F-actin", "Microtubules"],
         fluorophores=["mTurquoise", "EGFP", "EYFP"],
-        num_simulations=3,
+        num_simulations=100,
         root_dir=ROOT_DIR,
         light_pwrs=[15., 3., 2.],
     )
     
+    # Saving results
+    path_to_save_dir = get_save_path(SAVE_DIR)
+    save_metadata(res[0], sim_metadata, path_to_save_dir)
+    save_simulation_results(res, os.path.join(path_to_save_dir, "imgs"))
+    
+    # Display some results
     N, F = len(res), res[0].sizes["f"]
     
     fig, ax = plt.subplots(3, F, figsize=(15, 30))
