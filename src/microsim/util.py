@@ -544,3 +544,30 @@ def _read_mrc(
         data = imgrawdata
 
     return data
+
+def compute_FP_intensity_difference(imgs: xrDataArray):
+    """Compute the relative difference in intensity between emission images from
+    different fluorophores.
+    
+    """
+    from .schema.dimensions import Axis
+    
+    n = imgs.sizes[Axis.F]
+    if imgs.coords[Axis.F].values[-1] == "mixed_spectrum":
+        slc = slice(n-1)
+        imgs = imgs.isel(f=slc)
+        n -= 1
+    qtiles_lst = []
+    for i in range(n):
+        img = imgs.isel(f=i)
+        img = img.values.flatten()
+        qtiles_lst.append(np.quantile(img, (0.5, 0.75, 0.95, 0.99)))
+    
+    # get the first quantiles as reference; compute the difference w.r.t. to it
+    ref_qtiles = qtiles_lst[0]
+    diffs = []
+    for qtiles in qtiles_lst[1:]:
+        diff = np.mean((qtiles - ref_qtiles) / ref_qtiles)
+        diffs.append(diff)
+        
+    return diffs

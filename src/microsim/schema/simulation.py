@@ -10,7 +10,7 @@ from pydantic import AfterValidator, Field, model_validator
 
 from microsim._data_array import ArrayProtocol, from_cache, to_cache
 from microsim.schema._emission import bin_events, get_emission_events
-from microsim.util import microsim_cache
+from microsim.util import microsim_cache, compute_FP_intensity_difference
 from microsim.interval_creation import _generate_bins_equal_space
 
 from ._base_model import SimBaseModel
@@ -303,7 +303,7 @@ class Simulation(SimBaseModel):
                         else xr.ones_like(fluor_counts)
                         for x in fluor_binned_em.values
                     ],
-                    dim=Axis.W,
+                    dim=Axis.W, 
                 )
                 fluor_counts = fluor_counts.assign_coords(
                     w=fluor_binned_em[f"{Axis.W}_bins"].values
@@ -311,6 +311,18 @@ class Simulation(SimBaseModel):
             emission_flux_arr.append(fluor_counts)
 
         emission_flux_data = xr.concat(emission_flux_arr, dim=Axis.F)
+        # NOTE: Before summing over the fluorophores, we'd better check that intensities
+        # are not "too different", otherwise we'd have one or more fluorophores 
+        # dominating the others.
+        rel_diff_fps = compute_FP_intensity_difference(emission_flux_data)
+        print(
+            f"Rel Diff of Intensity (quantiles avg) w.r.t. 1st flurophore: "
+            f"{[f'{val*100:.2f}%' for val in rel_diff_fps]}.\n"
+            "When the difference is too large, the fluorophore with the highest "
+            "intensity will dominate the others in the mixed spectrum.\n"
+            "If this is the case, consider selecting different light powers "
+            "for the fluorophores."
+        )
         # Append the sum over the fluorophores
         emission_flux_sum = emission_flux_data.sum(dim=Axis.F)
         emission_flux_sum = emission_flux_sum.expand_dims(Axis.F, axis=2)
