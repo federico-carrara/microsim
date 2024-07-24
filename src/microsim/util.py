@@ -12,6 +12,7 @@ import numpy.typing as npt
 import platformdirs
 import tqdm
 from scipy import signal
+import matplotlib.pyplot as plt
 
 from ._data_array import ArrayProtocol, DataArray, xrDataArray
 
@@ -545,29 +546,21 @@ def _read_mrc(
 
     return data
 
-def compute_FP_intensity_difference(imgs: xrDataArray):
-    """Compute the relative difference in intensity between emission images from
-    different fluorophores.
-    
-    """
-    from .schema.dimensions import Axis
-    
-    n = imgs.sizes[Axis.F]
-    if imgs.coords[Axis.F].values[-1] == "mixed_spectrum":
-        slc = slice(n-1)
-        imgs = imgs.isel(f=slc)
-        n -= 1
-    qtiles_lst = []
+def intensity_histograms(imgs: xrDataArray, stage: str) -> None:
+    n = imgs.sizes["f"]
+    imgs = imgs.sum("w")
+    fig, ax = plt.subplots(1, n, figsize=(15, 5))
+    fig.suptitle(f"Intensity distributions - {stage}")
     for i in range(n):
         img = imgs.isel(f=i)
         img = img.values.flatten()
-        qtiles_lst.append(np.quantile(img, (0.5, 0.75, 0.95, 0.99)))
-    
-    # get the first quantiles as reference; compute the difference w.r.t. to it
-    ref_qtiles = qtiles_lst[0]
-    diffs = []
-    for qtiles in qtiles_lst[1:]:
-        diff = np.mean((qtiles - ref_qtiles) / ref_qtiles)
-        diffs.append(diff)
-        
-    return diffs
+        qtiles = np.quantile(img, (0.5, 0.75, 0.95, 0.99))
+        if i < n-1:
+            name = imgs.coords["f"].values[i].fluorophore.name
+        else:
+            name = "Mixed image"
+        ax[i].set_title(f"Intensity distr: {name}")
+        ax[i].hist(img, bins=30, color="gray")
+        for qt in qtiles:
+            ax[i].axvline(qt, color='r', linestyle='--', linewidth=1)
+    plt.show()
