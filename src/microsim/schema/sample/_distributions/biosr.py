@@ -17,10 +17,11 @@ NIMGS = {
     "Microtubules": 55,
 }
 
-class BioSR(_BaseDistribution):
+class BioSR(_BaseDistribution): # FromDir --> take away bioSR related stuff
     root_dir: str
-    label: Literal["CCPs", "ER", "F-actin", "Microtubules"]
+    label: Literal["CCPs", "ER", "F-actin", "Microtubules"] # str
     img_idx: int | None = None
+    # imreader: Callable
     
     @model_validator(mode="after")
     def _validate_img_idx(cls, value):
