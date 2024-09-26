@@ -53,7 +53,7 @@ class Settings(SimBaseModel, BaseSettings):
             "`'equal_area'` is more accurate, but is not supported in the case of "
             "multiple fluorophores."
         ),
-    )
+    ) #TODO: not used, remove
     spectral_bins_per_emission_channel: int = Field(
         4,
         description="Number of wavelengths to use (per channel) when simulating the "
@@ -78,7 +78,7 @@ class Settings(SimBaseModel, BaseSettings):
             "It regards the wavelength range for illumination and excitation spectra."
             "Increasing this will increase accuracy but also increase memory usage."
         ),
-    )
+    )  #TODO: not used, remove
     min_wavelength: int = Field(
         300,
         description=(
@@ -86,7 +86,7 @@ class Settings(SimBaseModel, BaseSettings):
             "It is used to define the range of the wavelength spectrum when "
             "fluorophores are not defined."
         ),
-    )
+    )  #TODO: not used, remove
     max_wavelength: int = Field(
         800,
         description=(
@@ -94,7 +94,7 @@ class Settings(SimBaseModel, BaseSettings):
             "It is used to define the range of the wavelength spectrum when "
             "fluorophores are not defined."
         ),
-    )
+    )  #TODO: not used, remove
 
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         validate_assignment=True,
