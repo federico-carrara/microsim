@@ -1,4 +1,4 @@
-from typing import Literal, Any
+from typing import Literal, Any, Sequence
 import os
 import datetime
 import json
@@ -8,24 +8,24 @@ import numpy as np
 import xarray as xr
 
 from microsim import schema as ms
+from microsim.schema.optical_config.lib import spectral_detector
 
+# --- Set simulation parameters
+labels: str = ["ER", "F-actin", "Microtubules"]
+"""The labels of the structures to simulate."""
+fluorophores: str = ["mTurquoise", "EGFP", "EYFP"]
+"""The fluorophores associated with the structures to simulate."""
+num_bands: int = 32
+"""The number of spectral bands to acquire (i.e., physically, the number of cameras)."""
+light_wavelengths: Sequence[int] = [488, 561, 640]
+"""List of lasers to use for excitation."""
+light_power: float = 10
+"""The power of the light source (applied in the optical config)."""
+out_range: tuple[int, int] = (400, 700)
+"""The range of wavelengths of the acquired spectrum in nm."""
+exposure_ms: float = 100
+"""The exposure time for the detector cameras in ms."""
 
-def create_custom_channel(
-    min_wave: int = 300, 
-    max_wave: int = 800,
-) -> ms.optical_config.OpticalConfig:
-
-    custom_spectrum = ms.Spectrum(
-        wavelength=np.arange(min_wave, max_wave + 1, 1),
-        intensity=np.ones(max_wave - min_wave + 1),
-    )
-    custom_filter = ms.optical_config.SpectrumFilter(transmission=custom_spectrum) # placement=ALL by default
-    custom_channel = ms.optical_config.OpticalConfig(
-        name="FEDERICO",
-        filters=[custom_filter],
-    )
-    
-    return custom_channel
 
 def create_distribution(
     label: Literal["CCPs", "ER", "F-actin", "Microtubules"],
@@ -38,12 +38,12 @@ def create_distribution(
         fluorophore=fluorophore, 
         img_idx=idx,  
     )
-    
+
+
 def init_simulation(
     labels: list[Literal["CCPs", "ER", "F-actin", "Microtubules"]],
     fluorophores: list[str],
     root_dir: str,
-    light_pwrs: list[float] = [1., 1., 1.],
     detector_qe: float = 0.8,
 ) -> ms.Simulation:
     assert len(labels) == len(fluorophores)
@@ -52,23 +52,33 @@ def init_simulation(
         read=False,
         write=False,
     )
+    # create the GT sample
     sample = ms.Sample(
         labels=[
             create_distribution(label, fp, root_dir) 
             for label, fp in zip(labels, fluorophores)
         ]
     )
+    # create the channels simulating the spectral detector
+    detect_channels = spectral_detector(
+        bins=num_bands,
+        min_wave=out_range[0],
+        max_wave=out_range[1],
+        lasers=light_wavelengths,
+    )
+    
     return ms.Simulation(
         truth_space=ms.ShapeScaleSpace(shape=(1, 1004, 1004), scale=(0.02, 0.02, 0.02)),
         output_space={"downscale": (1, 4, 4)},
         sample=sample,
-        channels=[create_custom_channel(min_wave=460, max_wave=550)],
-        modality=ms.Confocal(pinhole_au=2),
-        settings=ms.Settings(max_psf_radius_aus=2, cache=custom_cache_settings),
+        channels=detect_channels,
+        modality=ms.Confocal(pinhole_au=0.4),
+        settings=ms.Settings(
+            cache=custom_cache_settings, spectral_bins_per_emission_channel=1
+        ),
         detector=ms.CameraCCD(qe=detector_qe, read_noise=6, bit_depth=12),
-        emission_bins=32,
-        light_powers=light_pwrs
     )
+
     
 def run_simulation(sim: ms.Simulation, detect_exposure: int = 100) -> xr.DataArray:
     gt = sim.ground_truth()
@@ -83,9 +93,9 @@ def run_simulation(sim: ms.Simulation, detect_exposure: int = 100) -> xr.DataArr
     print("----------------------------------")
     digital_img = sim.digital_image(opt_img, exposure_ms=detect_exposure)
     print(f"Digital image: {digital_img.sizes}") # (W, C, F+1, Z, Y, X)
-    print("----------------------------------")
-    
+    print("----------------------------------")    
     return digital_img
+
 
 def simulate_dataset(
     labels: list[Literal["CCPs", "ER", "F-actin", "Microtubules"]],
@@ -122,6 +132,7 @@ def simulate_dataset(
     }
     return sim_imgs, sim_metadata
 
+
 def save_simulation_results(
     results: list[xr.DataArray],
     save_dir: str,
@@ -134,6 +145,7 @@ def save_simulation_results(
         img = normalize_image(img, dtype)
         fname = f"simulated_img_{i+1}.tif"
         tiff.imwrite(os.path.join(save_dir, fname), img.squeeze()) 
+
     
 def save_metadata(
     img: xr.DataArray,
@@ -166,6 +178,7 @@ def get_save_path(root_dir: str) -> str:
     current_dir = os.path.join(root_dir, formatted_date)
     return get_unique_directory_path(current_dir)
 
+
 def get_unique_directory_path(base_path: str) -> str:
     version = 0
     new_path = f"{base_path}_v{version}"
@@ -173,6 +186,7 @@ def get_unique_directory_path(base_path: str) -> str:
         version += 1
         new_path = f"{base_path}_v{version}"
     return new_path
+
 
 def normalize_image(
     img: np.ndarray, 
@@ -201,11 +215,10 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     res, sim_metadata = simulate_dataset(
-        labels=["ER", "F-actin", "Microtubules"],
-        fluorophores=["mTurquoise", "EGFP", "EYFP"],
+        labels=labels,
+        fluorophores=fluorophores,
         num_simulations=100,
         root_dir=ROOT_DIR,
-        light_pwrs=[15., 3., 2.],
     )
     
     # Saving results
