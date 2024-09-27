@@ -12,7 +12,7 @@ from .optical_config import (
     Shortpass,
     SpectrumFilter,
 )
-from .sample import CosemLabel, Fluorophore, FluorophoreDistribution, MatsLines, Sample
+from .sample import BioSR, CosemLabel, Fluorophore, FluorophoreDistribution, MatsLines, Sample
 from .settings import Settings
 from .simulation import Simulation
 from .space import DownscaledSpace, ExtentScaleSpace, ShapeExtentSpace, ShapeScaleSpace
@@ -22,6 +22,7 @@ logging.getLogger().setLevel(logging.INFO)
 __all__ = [
     "BackendName",
     "Bandpass",
+    "BioSR",
     "Camera",
     "CosemLabel",
     "CameraCCD",
