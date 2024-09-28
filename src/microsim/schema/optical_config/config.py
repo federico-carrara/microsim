@@ -150,14 +150,17 @@ class OpticalConfig(SimBaseModel):
 
         This represents the spectrum of light source and all of the filters in the
         excitation path. If there are multiple light sources, they are combined.
+        Different light sources can have different powers. In that case light sources
+        are scaled by the respective light powers.
         """
         exc = self.excitation
         if self.lights:
             l0, *rest = self.lights
-            illum_spect = l0.spectrum
+            p0, *p_rest = (l.power or 1 for l in self.lights)
+            illum_spect = l0.spectrum * p0
             if rest:
-                for light in rest:
-                    illum_spect = illum_spect + light.spectrum
+                for light, power in zip(rest, p_rest, strict=False):
+                    illum_spect = illum_spect + light.spectrum * power
             if exc:
                 return illum_spect * exc.spectrum
             return illum_spect
