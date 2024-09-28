@@ -101,6 +101,7 @@ def spectral_detector(
     max_wave: float,
     lasers: Sequence[int],
     powers: Sequence[float],
+    exposure_ms: float,
     bp_bandwidth: float = 10,
 ) -> list[OpticalConfig]:
     """Create a spectral detector with a given number of bins and lasers.
@@ -117,6 +118,8 @@ def spectral_detector(
         List of lasers to use.
     powers : Sequence[float]
         List of powers of the light sources (lasers).
+    exposure_ms : float
+        Exposure time for the detector cameras in ms.
     bp_bandwidth : float, optional
         Bandwidth of the bandpass filter, by default 10.
 
@@ -160,6 +163,7 @@ def spectral_detector(
             name=f"Channel {i}",
             lights=lights,
             filters=[bp, f],
+            exposure_ms=exposure_ms,
         )
         configs.append(oc)
     return configs
