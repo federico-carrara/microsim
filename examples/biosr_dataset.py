@@ -60,6 +60,7 @@ def init_simulation(
         ]
     )
     # create the channels simulating the spectral detector
+    # NOTE: this assumes excitation is done with lasers
     detect_channels = spectral_detector(
         bins=num_bands,
         min_wave=out_range[0],
@@ -84,15 +85,16 @@ def run_simulation(sim: ms.Simulation, detect_exposure: int = 100) -> xr.DataArr
     gt = sim.ground_truth()
     print(f"Ground truth: {gt.sizes}") # (F, Z, Y, X)
     print("----------------------------------")
-    em_img, _, _ = sim.spectral_emission_flux(gt, channel_idx=0, plot_hist=False)
-    print(f"Emission image: {em_img.sizes}") # (W, C, F+1, Z, Y, X)
+    em_img = sim.emission_flux()
+    print(f"Emission image: {em_img.sizes}") # (C, F, Z, Y, X)
     print("----------------------------------")
-    sim.spectral_image = True
-    opt_img = sim.optical_image(em_img, channel_idx=0)
-    print(f"Optical image: {opt_img.sizes}") # (W, C, F+1, Z, Y, X)
+    opt_img_per_fluor = sim.optical_image_per_fluor() # (C, F, Z, Y, X)
+    opt_img = opt_img_per_fluor.sum("f")
+    print(f"Optical image: {opt_img.sizes}") # (C, Z, Y, X)
     print("----------------------------------")
-    digital_img = sim.digital_image(opt_img, exposure_ms=detect_exposure)
-    print(f"Digital image: {digital_img.sizes}") # (W, C, F+1, Z, Y, X)
+    digital_img = sim.digital_image(opt_img)
+    # TODO: add digital GT (C, F, Z, Y, X)
+    print(f"Digital image: {digital_img.sizes}") # (C, Z, Y, X)
     print("----------------------------------")    
     return digital_img
 
@@ -102,7 +104,6 @@ def simulate_dataset(
     fluorophores: list[str],
     num_simulations: int,
     root_dir: str,
-    light_pwrs: list[float] = [1., 1., 1.],
     detector_qe: float = 0.8,
     detect_exposure: int = 100,
 ) -> list[xr.DataArray]:
@@ -111,7 +112,7 @@ def simulate_dataset(
         print("----------------------------------")
         print(f"SIMULATING IMAGE {i+1}")
         print("----------------------------------")
-        sim = init_simulation(labels, fluorophores, root_dir, light_pwrs, detector_qe)
+        sim = init_simulation(labels, fluorophores, root_dir, detector_qe)
         sim_imgs.append(run_simulation(sim, detect_exposure)) 
         
     # Create simulation metadata
@@ -123,7 +124,6 @@ def simulate_dataset(
         "structures": labels, 
         "fluorophores": fluorophores,
         "shape": list(sim_imgs[0].shape[-3:]),
-        "light_powers": light_pwrs,
         "downscale": sim.output_space.downscale,
         "detect_exposure_ms": detect_exposure,
         "detect_quantum_eff": detector_qe,
@@ -218,7 +218,7 @@ if __name__ == "__main__":
         labels=labels,
         fluorophores=fluorophores,
         num_simulations=100,
-        root_dir=ROOT_DIR,
+        root_dir=ROOT_DIR
     )
     
     # Saving results
