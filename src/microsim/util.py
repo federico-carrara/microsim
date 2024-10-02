@@ -13,6 +13,7 @@ import platformdirs
 import tqdm
 from scipy import signal
 import matplotlib.pyplot as plt
+import xarray as xr
 
 from ._data_array import ArrayProtocol, DataArray, xrDataArray
 
@@ -546,21 +547,35 @@ def _read_mrc(
 
     return data
 
-def intensity_histograms(imgs: xrDataArray, stage: str) -> None:
+def intensity_histograms(
+    imgs: xrDataArray, 
+    stage: Literal["Emission", "Optical", "Digital"],
+    max_y: int = None,
+    max_x: int = None
+) -> None:
+    """"""
     n = imgs.sizes["f"]
-    imgs = imgs.sum("w")
-    fig, ax = plt.subplots(1, n, figsize=(15, 5))
+    imgs = imgs.sum("c")
+    mixed_img = imgs.sum("f")
+    fig, ax = plt.subplots(1, n+1, figsize=(5*(n+1), 5))
     fig.suptitle(f"Intensity distributions - {stage}")
-    for i in range(n):
-        img = imgs.isel(f=i)
+    for i in range(n+1):
+        if i < n:
+            img = imgs.isel(f=i)
+        else:
+            img = mixed_img
         img = img.values.flatten()
         qtiles = np.quantile(img, (0.5, 0.75, 0.95, 0.99))
-        if i < n-1:
-            name = imgs.coords["f"].values[i].fluorophore.name
+        if i < n:
+            name = imgs.coords["f"].values[i].name
         else:
             name = "Mixed image"
         ax[i].set_title(f"Intensity distr: {name}")
         ax[i].hist(img, bins=30, color="gray")
         for qt in qtiles:
             ax[i].axvline(qt, color='r', linestyle='--', linewidth=1)
+        ax[i].set_ylim(0, max_y)
+        ax[i].set_xlim(0, max_x)
+        print(f"{name}: 50%: {qtiles[0]:.2f}, 75%: {qtiles[1]:.2f}, 95%: {qtiles[2]:.2f}, 99%: {qtiles[3]:.2f}")
+
     plt.show()
