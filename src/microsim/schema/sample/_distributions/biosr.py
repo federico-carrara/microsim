@@ -35,6 +35,11 @@ class BioSR(_BaseDistribution): # FromDir --> take away bioSR related stuff
     
     @property
     def _idx(self):
+        """Return the index of the image to load.
+        
+        If a specific index is not set through `self.img_idx`, a random index is
+        returned.
+        """
         if self.img_idx is None:
             n_imgs = NIMGS[self.label]
             return np.random.randint(n_imgs)
