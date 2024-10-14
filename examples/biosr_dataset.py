@@ -160,10 +160,13 @@ def save_simulation_results(
         print("----------------------------------")
         print(f"Saving {stage} images...")
         for i, img_dict in enumerate(results):
+            curr_save_dir = os.path.join(save_dir, stage)
+            os.makedirs(curr_save_dir, exist_ok=True)
             img = img_dict[stage].values
             img = normalize_image(img, dtype)
             fname = f"{stage}_img_{i+1}.tif"
-            tiff.imwrite(os.path.join(save_dir, fname), img.squeeze()) 
+            tiff.imwrite(os.path.join(curr_save_dir, fname), img.squeeze())
+    print("----------------------------------")
 
     
 def save_metadata(
@@ -188,17 +191,17 @@ def save_metadata(
 
 def get_save_path(root_dir: str) -> str:
     current_date = datetime.date.today()
-    formatted_date = current_date.strftime("%y%m%d")
+    formatted_date = current_date.strftime("%y%m")
     current_dir = os.path.join(root_dir, formatted_date)
     return get_unique_directory_path(current_dir)
 
 
 def get_unique_directory_path(base_path: str) -> str:
     version = 0
-    new_path = f"{base_path}_v{version}"
+    new_path = os.path.join(f"{base_path}", f"v{version}")
     while os.path.exists(new_path):
         version += 1
-        new_path = f"{base_path}_v{version}"
+        new_path = os.path.join(f"{base_path}", f"v{version}")
     return new_path
 
 
@@ -260,14 +263,14 @@ if __name__ == "__main__":
         dtype="16bit",
     )
     
-    # # Display some results
-    # N, F = len(res), res[0]["optical_pf"].sizes["f"]
-    # fig, ax = plt.subplots(3, 5, figsize=(30, 6))
-    # fig.suptitle("Some Examples of Simulated Images", fontsize=20)
-    # sp_bands_idxs = [4, 12, 20, 24, 28]
-    # for i, img_dict in enumerate(res[:3]):
-    #     for j, sp_bands_idx in enumerate(sp_bands_idxs):
-    #         curr_img = img_dict["digital"][sp_bands_idx, 0, ...].values
-    #         ax[i, j].set_title(f"Digital Mixed image - Sample {i+1} - Band {sp_bands_idx}")
-    #         ax[i, j].imshow(curr_img, cmap="gray")
-    # plt.show()
+    # Display some results
+    N, F = len(res), res[0]["optical_pf"].sizes["f"]
+    fig, ax = plt.subplots(3, 5, figsize=(30, 18))
+    fig.suptitle("Some Examples of Simulated Images", fontsize=20)
+    sp_bands_idxs = [4, 12, 20, 24, 28]
+    for i, img_dict in enumerate(res[:3]):
+        for j, sp_bands_idx in enumerate(sp_bands_idxs):
+            curr_img = img_dict["digital"][sp_bands_idx, 0, ...].values
+            ax[i, j].set_title(f"Mixed img - Sample {i+1} - Band {sp_bands_idx}")
+            ax[i, j].imshow(curr_img)
+    plt.show()
