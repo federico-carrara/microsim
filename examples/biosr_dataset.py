@@ -11,33 +11,36 @@ import xarray as xr
 from microsim import schema as ms
 from microsim.schema.optical_config.lib import spectral_detector
 from microsim.schema.dimensions import Axis
+from microsim.util import view_multi_channel
 
 ImgStage = Literal["emission", "optical_pf", "digital_pf", "digital"]
 
 
 # --- Set simulation parameters
-n_simulations: int = 4
+n_simulations: int = 250
 """The number of images to simulate."""
-labels: str = ["ER", "F-actin", "Microtubules"]
+labels: str = ["ER", "F-actin", "Microtubules", "CCPs", "F-actin_Nonlinear"]
 """The labels of the structures to simulate."""
-fluorophores: str = ["mTurquoise", "EGFP", "EYFP"]
+fluorophores: str = ["mTurquoise", "EGFP", "EYFP", "tdTomato", "mCherry"]
 """The fluorophores associated with the structures to simulate."""
 num_bands: int = 32
 """The number of spectral bands to acquire (i.e., physically, the number of cameras)."""
-light_wavelengths: Sequence[int] = [435, 488, 514]
+light_wavelengths: Sequence[int] = [435, 488, 514, 555, 586]
 """List of lasers to use for excitation."""
-light_powers: Sequence[float] = [3., 3., 1.]
+light_powers: Sequence[float] = [4., 3., 1., 1., 6.]
 """List of powers associate to each light source (work as scaling factors)."""
-out_range: tuple[int, int] = (460, 550)
+out_range: tuple[int, int] = (450, 650)
 """The range of wavelengths of the acquired spectrum in nm."""
 exposure_ms: float = 5
 """The exposure time for the detector cameras in ms."""
 detector_quantum_eff: float = 0.8
 """The quantum efficiency of the detector cameras."""
+bp_bandwidth: float = 5
+"""The bandwidth of the bandpass filter in nm used in the spectral detector."""
 
 
 def create_distribution(
-    label: Literal["CCPs", "ER", "F-actin", "Microtubules"],
+    label: Literal["CCPs", "ER", "F-actin", "Microtubules", "F-actin_Nonlinear"],
     fluorophore: str,
     root_dir: str,
     idx: int | None = None, 
@@ -50,7 +53,7 @@ def create_distribution(
 
 
 def init_simulation(
-    labels: list[Literal["CCPs", "ER", "F-actin", "Microtubules"]],
+    labels: list[Literal["CCPs", "ER", "F-actin", "Microtubules", "F-actin_Nonlinear"]],
     fluorophores: list[str],
     root_dir: str,
     channels: Sequence[ms.OpticalConfig],
@@ -239,7 +242,7 @@ if __name__ == "__main__":
         lasers=light_wavelengths,
         powers=light_powers,
         exposure_ms=exposure_ms,
-        beam_splitter=False,
+        bp_bandwidth=5,
     )
     # run simulations
     res, sim_metadata = simulate_dataset(
@@ -264,13 +267,6 @@ if __name__ == "__main__":
     )
     
     # Display some results
-    N, F = len(res), res[0]["optical_pf"].sizes["f"]
-    fig, ax = plt.subplots(3, 5, figsize=(30, 18))
-    fig.suptitle("Some Examples of Simulated Images", fontsize=20)
-    sp_bands_idxs = [4, 12, 20, 24, 28]
-    for i, img_dict in enumerate(res[:3]):
-        for j, sp_bands_idx in enumerate(sp_bands_idxs):
-            curr_img = img_dict["digital"][sp_bands_idx, 0, ...].values
-            ax[i, j].set_title(f"Mixed img - Sample {i+1} - Band {sp_bands_idx}")
-            ax[i, j].imshow(curr_img)
-    plt.show()
+    images = [img["digital"][:, 0, ...].values for img in res[:4]]
+    view_multi_channel(images, jupyter=False)
+       
