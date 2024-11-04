@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import shutil
 import warnings
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast, Optional
 from urllib import parse, request
 from urllib.error import HTTPError
 
@@ -13,7 +13,8 @@ import platformdirs
 import tqdm
 from scipy import signal
 import matplotlib.pyplot as plt
-import xarray as xr
+from IPython.display import HTML
+from matplotlib.animation import FuncAnimation
 
 from ._data_array import ArrayProtocol, DataArray, xrDataArray
 
@@ -579,3 +580,88 @@ def intensity_histograms(
         print(f"{name}: 50%: {qtiles[0]:.2f}, 75%: {qtiles[1]:.2f}, 95%: {qtiles[2]:.2f}, 99%: {qtiles[3]:.2f}")
 
     plt.show()
+
+
+def _get_animation(
+    imgs: list[np.ndarray], 
+    axis: int,
+    titles: Optional[list[str]] = None
+) -> FuncAnimation:
+    """Get the matplotlib animation for multiple images.
+
+    Parameters
+    ----------
+    imgs : Union[np.ndarray, List[np.ndarray]]
+        A 3D image array or a list of 3D image arrays to plot.
+    axis : int
+        Axis to scroll through, common to all images.
+    titles: Optional[list[str]]
+        Titles for each image. Default is `None`.
+
+    Returns
+    -------
+    FuncAnimation
+        Matplotlib animation.
+    """
+    if isinstance(imgs, np.ndarray):
+        imgs = [imgs]
+    
+    assert all(img.ndim == 3 for img in imgs), "Each image must be 3D."
+    assert all(img.shape == imgs[0].shape for img in imgs), "All images must have the same shape."
+    assert axis < imgs[0].ndim, "Scroll axis out of range."
+    
+    plt.rcParams["animation.html"] = "jshtml"
+
+    num_images = len(imgs)
+    fig, axs = plt.subplots(1, num_images, figsize=(5 * num_images, 5))
+    
+    # Ensure axs is iterable when there's only one subplot
+    if num_images == 1:
+        axs = [axs]
+
+    slices = [slice(None)] * imgs[0].ndim
+    slices[axis] = 0
+    
+    ims = []
+    for img, ax in zip(imgs, axs):
+        ax.set_title(titles.pop(0) if titles else "")
+        im = ax.imshow(img[tuple(slices)])
+        ims.append(im)
+        
+    # Update function for all images
+    def update(frame: int):
+        slices[axis] = frame
+        for im, img in zip(ims, imgs):
+            im.set_array(img[tuple(slices)])
+        return ims
+
+    return FuncAnimation(fig, update, frames=imgs[0].shape[axis], interval=400)
+
+
+def view_multi_channel(
+    imgs: list[np.ndarray],
+    titles: Optional[list[str]] = None,
+    axis: Optional[int] = 0, 
+    jupyter: Optional[bool] = True
+) -> Optional[HTML]:
+    """View one or multiple multi-channel 2D images.
+
+    Parameters
+    ----------
+    imgs : List[np.ndarray]
+        List of 3D images to plot. Each image must have the same shape.
+    axis : Optional[int]
+        Channel axis to scroll through. Default is 0.
+    jupyter : Optional[bool]
+        Whether to display in a Jupyter Notebook. Default is True.
+
+    Returns
+    -------
+    Optional[HTML]
+        HTML animation if in Jupyter Notebook, else `None`.
+    """
+    anim = _get_animation(imgs, axis, titles)
+    if jupyter:
+        return HTML(anim.to_jshtml())
+    else:    
+        plt.show()

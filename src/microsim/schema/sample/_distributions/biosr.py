@@ -110,8 +110,5 @@ class BioSR(_BaseDistribution): # FromDir --> take away bioSR related stuff
         data = self._load_data()
         if space.shape != data.shape:
             data = BioSR._crop_to_shape(data, space.shape[-2:])
-            print(
-                f"Data cropped to match truth space shape: {space.shape}."
-            )
         data = self._map_to_fp_distrib(data)        
         return space + xp.asarray(data).astype(space.dtype)
