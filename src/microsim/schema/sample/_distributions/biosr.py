@@ -15,11 +15,12 @@ NIMGS = {
     "F-actin": 51,
     "ER": 68,
     "Microtubules": 55,
+    "F-actin_Nonlinear": 51,
 }
 
 class BioSR(_BaseDistribution): # FromDir --> take away bioSR related stuff
     root_dir: str
-    label: Literal["CCPs", "ER", "F-actin", "Microtubules"] # str
+    label: Literal["CCPs", "ER", "F-actin", "Microtubules", "F-actin_Nonlinear"] # str
     img_idx: int | None = None
     # imreader: Callable
     
@@ -54,7 +55,7 @@ class BioSR(_BaseDistribution): # FromDir --> take away bioSR related stuff
     def _load_data(self) -> np.ndarray:
         fname = os.path.join(
             self.label, 
-            "GT_all.mrc" if self.label != "F-actin" else f"GT_all_a.mrc"
+            "GT_all.mrc" if "F-actin" not in self.label else f"GT_all_a.mrc"
         )
         fpath = os.path.join(self.root_dir, fname)
         imgs = _read_mrc(fpath) # shape: (X, Y, N)
@@ -83,16 +84,34 @@ class BioSR(_BaseDistribution): # FromDir --> take away bioSR related stuff
         data = (data * 255).astype(np.uint8)
         return data
     
-    def _crop_to_shape(self, data: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
-        pass   
+    @staticmethod
+    def _crop_to_shape(data: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+        """Center-crop data to a specific shape.
+        
+        Parameters
+        ----------
+        data : np.ndarray
+            Data to crop. Shape: (1, H, W)
+        shape : tuple[int, int]
+            Target shape.
+        
+        Returns
+        -------
+        np.ndarray
+            Cropped data.
+        """
+        h, w = shape
+        _, h0, w0 = data.shape
+        h0, w0 = h0 // 2, w0 // 2
+        h0, w0 = h0 - h // 2, w0 - w // 2
+        return data[:, h0:h0+h, w0:w0+w]
         
     def render(self, space: xrDataArray, xp: NumpyAPI | None = None) -> xrDataArray:
         data = self._load_data()
         if space.shape != data.shape:
-            # TODO: implement cropping to shape
-            raise ValueError(
-                "This GroundTruth may only be used with simulation space of shape: "
-                f"{data.shape}. Got: {space.shape}"
+            data = BioSR._crop_to_shape(data, space.shape[-2:])
+            print(
+                f"Data cropped to match truth space shape: {space.shape}."
             )
         data = self._map_to_fp_distrib(data)        
         return space + xp.asarray(data).astype(space.dtype)

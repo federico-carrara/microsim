@@ -102,7 +102,6 @@ def spectral_detector(
     lasers: Sequence[int],
     powers: Sequence[float],
     exposure_ms: float,
-    beam_splitter: bool = False,
     bp_bandwidth: float = 10,
 ) -> list[OpticalConfig]:
     """Create a spectral detector with a given number of bins and lasers.
@@ -143,15 +142,14 @@ def spectral_detector(
     waves = np.arange(min_wave - 100, max_wave + 100, 1)
 
     # create fake bandpass ... could also be something like 80/20
-    laser0, *rest = lasers  
+    laser0, *rest = lasers
     bp = bandpass(waves, center=laser0, bandwidth=bp_bandwidth, transmission=1)
     for laser in rest:
         bp = bp + bandpass(waves, center=laser, bandwidth=bp_bandwidth)
-    bp = SpectrumFilter(transmission=Spectrum(wavelength=waves, intensity=1 - bp))
-    if beam_splitter:
-        bp.placement = Placement.BS
-    else:
-        bp.placement = Placement.EX_PATH
+    bp = SpectrumFilter(
+        transmission=Spectrum(wavelength=waves, intensity=1 - bp),
+        placement=Placement.BS,
+    )
 
     configs: list[OpticalConfig] = []
     edges = np.linspace(min_wave, max_wave, bins + 1)
