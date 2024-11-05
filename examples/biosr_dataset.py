@@ -17,19 +17,19 @@ ImgStage = Literal["emission", "optical_pf", "digital_pf", "digital"]
 
 
 # --- Set simulation parameters
-n_simulations: int = 250
+n_simulations: int = 200
 """The number of images to simulate."""
-labels: str = ["ER", "F-actin", "Microtubules", "CCPs", "F-actin_Nonlinear"]
+labels: str = ["ER", "F-actin", "Microtubules", "CCPs"]
 """The labels of the structures to simulate."""
-fluorophores: str = ["mTurquoise", "EGFP", "EYFP", "tdTomato", "mCherry"]
+fluorophores: str = ["mTurquoise", "EGFP", "EYFP", "tdTomato"]
 """The fluorophores associated with the structures to simulate."""
-num_bands: int = 32
+num_bands: int = 16
 """The number of spectral bands to acquire (i.e., physically, the number of cameras)."""
-light_wavelengths: Sequence[int] = [435, 488, 514, 555, 586]
+light_wavelengths: Sequence[int] = [435, 488, 514, 555]
 """List of lasers to use for excitation."""
-light_powers: Sequence[float] = [4., 3., 1., 1., 6.]
+light_powers: Sequence[float] = [4., 3., 1., 1.]
 """List of powers associate to each light source (work as scaling factors)."""
-out_range: tuple[int, int] = (450, 650)
+out_range: tuple[int, int] = (450, 600)
 """The range of wavelengths of the acquired spectrum in nm."""
 exposure_ms: float = 5
 """The exposure time for the detector cameras in ms."""
@@ -187,9 +187,9 @@ def save_metadata(
         "z_coords": img.coords[Axis.Z].values.tolist(),
     }
     with open(os.path.join(save_dir, "sim_coords.json"), "w") as f:
-        json.dump(coords_info, f)
+        json.dump(coords_info, f, indent=4)
     with open(os.path.join(save_dir, "sim_metadata.json"), "w") as f:
-        json.dump(sim_metadata, f)
+        json.dump(sim_metadata, f, indent=4)
 
 
 def get_save_path(root_dir: str) -> str:
