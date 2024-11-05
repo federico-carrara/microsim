@@ -139,6 +139,7 @@ def simulate_dataset(
     sim_metadata = {
         "structures": labels, 
         "fluorophores": fluorophores,
+        "num_bins": num_bands,
         "shape": list(sim_imgs[0]["digital"].shape[2:]),
         "downscale": sim.output_space.downscale,
         "detect_exposure_ms": exposure_ms,
