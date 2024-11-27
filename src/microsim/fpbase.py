@@ -41,8 +41,8 @@ class SpectrumOwner(BaseModel):
 
 class State(BaseModel):
     id: int
-    exMax: float  # nanometers
-    emMax: float  # nanometers
+    exMax: float | None  # nanometers
+    emMax: float | None  # nanometers
     extCoeff: float | None = None  # M^-1 cm^-1
     qy: float | None = None
     spectra: list[Spectrum]
