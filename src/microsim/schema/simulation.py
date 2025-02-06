@@ -247,7 +247,9 @@ class Simulation(SimBaseModel):
         # (S, C, F, Z, Y, X)
         return total_flux
 
-    def optical_image_per_fluor(self) -> xr.DataArray:
+    def optical_image_per_fluor(
+        self, filt_em_rates: xr.DataArray | None = None
+    ) -> xr.DataArray:
         """Return the optical image for each channel/fluorophore combination.
 
         This is the emission from each fluorophore in each channel, after filtering by
@@ -255,23 +257,26 @@ class Simulation(SimBaseModel):
 
         The return array has dimensions (S, C, F, Z, Y, X).  The units are photons/s.
         """
+        if filt_em_rates is None:
+            filt_em_rates = self.filtered_emission_rates()
+
         # (S, C, F, Z, Y, X)
         return self.modality.render(
             self.ground_truth(),  # (S, F, Z, Y, X)
-            self.filtered_emission_rates(),  # (C, F, W)
+            filt_em_rates,  # (C, F, W)
             objective_lens=self.objective_lens,
             settings=self.settings,
             xp=self._xp,
         )
 
-    def optical_image(self) -> xr.DataArray:
+    def optical_image(self, filt_em_rates: xr.DataArray | None = None) -> xr.DataArray:
         """Return the optical image as delivered to the detector.
 
         This is the same as `optical_image_per_fluor`, but sums the contributions of all
         fluorophores in each channel (which a detector would not know). The return
         array has dimensions (S, C, Z, Y, X).  The units are photons/s.
         """
-        oipf = self.optical_image_per_fluor()
+        oipf = self.optical_image_per_fluor(filt_em_rates)
         return oipf.sum(Axis.F)  # (S, C, Z, Y, X)
 
     def digital_image(
