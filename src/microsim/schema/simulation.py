@@ -1,11 +1,12 @@
 import logging
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 import numpy as np
 import pandas as pd
 import xarray as xr
+from annotated_types import MinLen
 from pydantic import AfterValidator, Field, field_validator, model_validator
 
 from microsim._data_array import ArrayProtocol, from_cache, to_cache
@@ -53,7 +54,7 @@ class Simulation(SimBaseModel):
 
     truth_space: Space
     output_space: Space | None = None
-    samples: Sample | list[Sample]
+    samples: Annotated[list[Sample], MinLen(1)]
     modality: Modality = Field(default_factory=Widefield)
     objective_lens: ObjectiveLens = Field(default_factory=ObjectiveLens)
     channels: list[OpticalConfig] = Field(default_factory=lambda: [FITC])
@@ -103,8 +104,8 @@ class Simulation(SimBaseModel):
         return self
 
     @field_validator("samples")
-    def _samples_to_list(value: Sample | list[Sample]) -> list[Sample]:
-        return [value] if isinstance(value, Sample) else value
+    def _samples_to_list(value: Any) -> list[Any]:
+        return [value] if not isinstance(value, list | tuple) else value
 
     @property
     def sample(self) -> Sample:
@@ -174,7 +175,7 @@ class Simulation(SimBaseModel):
             # concat along B axis
             self._ground_truth = xr.concat(
                 truths, dim=pd.Index(range(len(truths)), name=Axis.S)
-            ) # TODO: is there a better way to give coords to this axis?
+            )  # TODO: is there a better way to give coords to this axis?
             self._ground_truth.attrs.update(
                 units="fluorophores", long_name="Ground Truth"
             )
@@ -239,9 +240,9 @@ class Simulation(SimBaseModel):
             return truth
 
         # total photons/s emitted by each fluorophore in each channel
-        total_flux = (
-            self.filtered_emission_rates().sum(Axis.W) * truth
-        ).transpose(Axis.S, ...)
+        total_flux = (self.filtered_emission_rates().sum(Axis.W) * truth).transpose(
+            Axis.S, ...
+        )
         total_flux.attrs.update(units="photon/sec", long_name="Emission Flux")
 
         # (S, C, F, Z, Y, X)
@@ -289,10 +290,10 @@ class Simulation(SimBaseModel):
         """Return the digital image as captured by the detector.
 
         This down-scales the optical image to the output space, and simulates the
-        detector response.  The return array has dimensions (S, C, [F], Z, Y, X).  The 
-        units are gray values, based on the bit-depth of the detector.  If there is no 
+        detector response.  The return array has dimensions (S, C, [F], Z, Y, X).  The
+        units are gray values, based on the bit-depth of the detector.  If there is no
         detector or `with_detector_noise` is False, the units are simply photons.
-        
+
         NOTE: the input `optical_image` can only contain a fluorophore dimension (e.g.,
         it can be the output of `optical_image_per_fluor()`).
         """
