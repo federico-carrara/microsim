@@ -100,6 +100,7 @@ def spectral_detector(
     min_wave: float,
     max_wave: float,
     lasers: Sequence[int],
+    laser_powers: Sequence[float],
     bp_bandwidth: float = 10,
 ) -> list[OpticalConfig]:
     """Create a spectral detector with a given number of bins and lasers.
@@ -114,6 +115,8 @@ def spectral_detector(
         Maximum wavelength to consider.
     lasers : Sequence[int]
         List of lasers to use.
+    laser_powers: Sequence[float]
+        List of laser powers.
     bp_bandwidth : float, optional
         Bandwidth of the bandpass filter, by default 10.
 
@@ -129,7 +132,9 @@ def spectral_detector(
 
     >>> spectral_detector(8, 480, 600, [488, 515, 561])
     """
-    lights = [LightSource.laser(laser) for laser in lasers]
+    lights = [
+        LightSource.laser(laser, power) for laser, power in zip(lasers, laser_powers)
+    ]
     waves = np.arange(min_wave - 100, max_wave + 100, 1)
 
     # create fake bandpass ... could also be something like 80/20
