@@ -1,4 +1,5 @@
 import json
+import time
 from collections.abc import Mapping
 from difflib import get_close_matches
 from functools import cache
@@ -147,14 +148,23 @@ class FilterSpectrumResponse(BaseModel):
 FPBASE_URL = "https://www.fpbase.org/graphql/"
 
 
-def _fpbase_query(query: str) -> bytes:
+def _fpbase_query(query: str, max_attempts: int = 10, wait_time: float = 0.5) -> bytes:
     headers = {"Content-Type": "application/json", "User-Agent": "microsim"}
     data = json.dumps({"query": query}).encode("utf-8")
-    req = Request(FPBASE_URL, data=data, headers=headers)
-    with urlopen(req) as response:
-        if response.status != 200:
-            raise RuntimeError(f"HTTP status {response.status}")
-        return response.read()  # type: ignore
+    last_exception = None
+    
+    for attempt in range(1, max_attempts + 1):
+        try:
+            req = Request(FPBASE_URL, data=data, headers=headers)
+            with urlopen(req, timeout=10) as response:
+                if response.status != 200:
+                    raise RuntimeError(f"HTTP status {response.status}")
+                return response.read()  # type: ignore
+        except Exception as e:
+            last_exception = e
+            time.sleep(wait_time)
+    
+    raise RuntimeError(f"FPbase query failed after {max_attempts} attempts") from last_exception
 
 
 @cache
