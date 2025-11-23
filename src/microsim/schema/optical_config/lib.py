@@ -150,7 +150,7 @@ def spectral_detector(
     configs: list[OpticalConfig] = []
     edges = np.linspace(min_wave, max_wave, bins + 1)
     for i, (low, high) in enumerate(pairwise(edges)):
-        mask = (waves >= low) & (waves <= high)
+        mask = (waves >= low) & (waves < high)
         f = SpectrumFilter(
             transmission=Spectrum(wavelength=waves, intensity=mask),
             placement=Placement.EM_PATH,
