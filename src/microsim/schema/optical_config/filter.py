@@ -3,11 +3,11 @@ from enum import Enum
 from functools import cached_property
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
-import fpbase
 import numpy as np
 from annotated_types import Interval
 from pydantic import Field, computed_field
 
+from microsim import fpbase
 from microsim.schema._base_model import SimBaseModel
 from microsim.schema.spectrum import Spectrum
 
@@ -49,27 +49,27 @@ class _FilterBase(SimBaseModel):
     @classmethod
     def from_fpbase(
         cls,
-        filter: str | fpbase.models.FilterPlacement | fpbase.models.Filter,
+        filter: str | fpbase.FilterPlacement | fpbase.FilterSpectrum,
         placement: Placement = Placement.ALL,
     ) -> "SpectrumFilter":
         if isinstance(filter, str):
             filter = fpbase.get_filter(filter)  # noqa
-        elif isinstance(filter, fpbase.models.FilterPlacement):
+        elif isinstance(filter, fpbase.FilterPlacement):
             return SpectrumFilter(
-                name=filter.filter.name,
+                name=filter.name,
                 placement=filter.path,
-                transmission=Spectrum.from_fpbase(filter.filter.spectrum),
+                transmission=Spectrum.from_fpbase(filter.spectrum),
             )
-        if not isinstance(filter, fpbase.models.Filter):
+        if not isinstance(filter, fpbase.FilterSpectrum):
             raise TypeError(
-                "filter must be a string, FilterPlacement, or Filter, "
+                "filter must be a string, FilterPlacement, or FilterSpectrum, "
                 f"not {type(filter)}"
             )
 
         return SpectrumFilter(
-            name=filter.name,
+            name=filter.ownerFilter.name,
             placement=placement,
-            transmission=Spectrum.from_fpbase(filter.spectrum),
+            transmission=Spectrum.from_fpbase(filter),
         )
 
     def plot(self) -> None:

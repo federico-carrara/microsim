@@ -5,21 +5,15 @@ from textwrap import dedent
 
 import pytest
 
-from ._util import HAVE_INTERNET
-
 DOCS = Path(__file__).parent.parent / "docs"
 DOCS_MDS = list(DOCS.rglob("*.md"))
 DOCS_MDS += [Path(__file__).parent.parent / "README.md"]
 CODE_BLOCK = re.compile(r"```python([^`]*)```", re.DOTALL)
 JSON_BLOCK = re.compile(r"```json([^`]*)```", re.DOTALL)
 
-if not HAVE_INTERNET:
-    DOCS_MDS = [p for p in DOCS_MDS if p.name not in {"stages.md"}]
-
 
 @pytest.mark.parametrize("doc", DOCS_MDS, ids=lambda p: p.name)
 def test_docs(doc: Path, tmp_path: Path) -> None:
-    pytest.importorskip("matplotlib")
     os.chdir(tmp_path)
     source = doc.read_text(encoding="utf-8")
 

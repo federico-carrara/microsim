@@ -17,5 +17,3 @@ sim = ms.Simulation(
     detector=ms.CameraCCD(qe=0.82, read_noise=2, bit_depth=12),
     # output_path="au1.tif",
 )
-
-sim.plot()

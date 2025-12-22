@@ -15,8 +15,6 @@ The goal of this library is to generate highly realistic simulated data such as 
 *(this data was generated using segmentations from
 [cell jrc_hela-3 at OpenOrganelle](https://openorganelle.janelia.org/datasets/jrc_hela-3) as the ground truth)*
 
-<https://github.com/user-attachments/assets/905fa1af-c8bd-406e-87a7-7c5921de74d1>
-
 ## Documentation
 
 Start with the [tutorial](https://www.talleylambert.com/microsim/tutorial/), and read about the
@@ -29,33 +27,16 @@ on the `Simulation` object and options for all of the fields.
 ### from PyPI
 
 ```bash
-pip install "microsim[all]"
+pip install microsim
 ```
 
-> [!NOTE]
-> At the moment, this library is a bit more "application" than it
-> is "library".  If you are following the docs or tutorials, its
-> probably best to install the full `[all]` extra, which brings in
-> io, visualization, and other data-fetching dependencies.  However,
-> the bare minimal install is fully functional for generating data.
-
-### Local Development
-
-```sh
-gh repo clone tlambert03/microsim
-cd microsim
-uv sync
-```
-
-### From github
+### from github
 
 To get the bleeding edge version, which will change rapidly, you can install from github.
 
 ```bash
-pip install "microsim[all] @ git+https://github.com/tlambert03/microsim"
+pip install git+https://github.com/tlambert03/microsim
 ```
-
-### With GPU support
 
 If available, microsim can use either Jax or Cupy to accelerate computations.
 These are not installed by default, see the

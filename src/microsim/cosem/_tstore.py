@@ -63,9 +63,7 @@ def read_tensorstore(
     level = level or 0
     spec = ts_spec(img, level=level, bin_mode=bin_mode)
     if cache_limit:
-        ctx = spec.setdefault("context", {})
-        ctx["cache_pool"] = {"total_bytes_limit": cache_limit}
-
+        spec["context"] = {"cache_pool": {"total_bytes_limit": cache_limit}}
     data = ts.open(spec).result()
 
     # "squeeze" the data (haven't found a tensorstore-native way to do this)
@@ -116,13 +114,7 @@ def _kv_store(img: "CosemImage", level: int, bin_mode: BinMode = "standard") -> 
         return {"driver": "file", "path": str(cached_path)}
 
     # if we get here, use the remote bucket to load data
-    return {
-        "driver": "s3",
-        "bucket": COSEM_BUCKET,
-        "path": path,
-        "aws_credentials": {"type": "anonymous"},
-        "aws_region": "us-east-1",
-    }
+    return {"driver": "s3", "bucket": COSEM_BUCKET, "path": path}
 
 
 def ts_spec(
@@ -233,7 +225,7 @@ def sum_bin(
 
     for lvl in range(1, max_level or len(img.scales)):
         # determine chunk size of incoming array
-        inchunk = cast("tuple", arr_in.chunk_layout.read_chunk.shape)
+        inchunk = cast(tuple, arr_in.chunk_layout.read_chunk.shape)
         # path of the destination array
         path = dest / (img.bucket_path.lstrip("/") + f"/sum{lvl}")
         kvstore = {"driver": "file", "path": str(path)}

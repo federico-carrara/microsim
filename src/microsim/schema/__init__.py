@@ -1,5 +1,4 @@
 import logging
-from typing import TYPE_CHECKING, Any
 
 from .backend import BackendName, DeviceName, NumpyAPI
 from .detectors import CameraCCD, CameraCMOS, CameraEMCCD
@@ -13,14 +12,11 @@ from .optical_config import (
     Shortpass,
     SpectrumFilter,
 )
-from .sample import Fluorophore, FluorophoreDistribution, MatsLines, Sample
+from .sample import CosemLabel, Fluorophore, FluorophoreDistribution, MatsLines, Sample
 from .settings import Settings
 from .simulation import Simulation
 from .space import DownscaledSpace, ExtentScaleSpace, ShapeExtentSpace, ShapeScaleSpace
 from .spectrum import Spectrum
-
-if TYPE_CHECKING:
-    from .sample._distributions.cosem import CosemLabel
 
 logging.getLogger().setLevel(logging.INFO)
 __all__ = [
@@ -54,11 +50,3 @@ __all__ = [
     "SpectrumFilter",
     "Widefield",
 ]
-
-
-def __getattr__(name: str) -> Any:
-    if name == "CosemLabel":
-        from .sample import CosemLabel
-
-        return CosemLabel
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

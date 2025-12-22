@@ -1,5 +1,3 @@
-import importlib
-import importlib.util
 import pickle
 from pathlib import Path
 
@@ -68,12 +66,7 @@ def test_schema(
         np.testing.assert_allclose(out1, out2)
 
 
-EXTENSIONS = [".zarr", ".nc"]
-if importlib.util.find_spec("tifffile"):
-    EXTENSIONS.append(".tiff")
-
-
-@pytest.mark.parametrize("ext", EXTENSIONS)
+@pytest.mark.parametrize("ext", [".tif", ".zarr", ".nc"])
 def test_simulation_output(tmp_path: Path, ext: str) -> None:
     sim = ms.Simulation(
         truth_space=ms.ShapeScaleSpace(shape=(64, 128, 128), scale=(0.2, 0.1, 0.1)),
@@ -154,15 +147,3 @@ def test_pickle(sim1: ms.Simulation) -> None:
     pickled = pickle.dumps(sim1)
     assert pickle.loads(pickled) == sim1
     assert sim1.model_copy(deep=True) is not sim1
-
-
-def test_simulation_write_from_ground_truth(tmp_path: Path) -> None:
-    """Test that unserializeable things don't prevent write."""
-    sim = ms.Simulation.from_ground_truth(
-        ground_truth=np.zeros((64, 128, 128)),
-        scale=(0.04, 0.01, 0.01),
-        output_space={"downscale": 4},
-        output_path=tmp_path / "output.zarr",
-    )
-    sim.run()
-    assert (tmp_path / "output.zarr").exists()

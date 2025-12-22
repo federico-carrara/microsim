@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import warnings
 from contextlib import nullcontext, suppress
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
@@ -34,14 +33,8 @@ class NumpyAPI:
     def create(cls, backend: BackendName | NumpyAPI | None) -> NumpyAPI:
         if isinstance(backend, NumpyAPI):
             return backend
-        else:
-            if backend in ("auto", None):
-                backend = os.getenv("MICROSIM_BACKEND", "") or "auto"  # type: ignore
-            if backend not in ("numpy", "torch", "jax", "cupy", "auto"):
-                raise ValueError(
-                    f"Invalid backend: {backend}. Must be one of "
-                    "'numpy', 'torch', 'jax', 'cupy', or 'auto'."
-                )
+        if not backend:
+            backend = backend or "auto"
         backend = backend.lower()  # type: ignore
 
         ctx = suppress(ImportError) if backend == "auto" else nullcontext()
@@ -185,7 +178,7 @@ class JaxAPI(NumpyAPI):
         # tests passing.
         np.random.seed(seed)
 
-    def poisson_rvs(
+    def poisson_rvs(  # type: ignore
         self,
         lam: jax.Array | float,
         shape: Sequence[int] | None = None,
@@ -216,7 +209,7 @@ class JaxAPI(NumpyAPI):
         simp = simp.at[-1].set(1)
         return simp
 
-    def _array_assign(
+    def _array_assign(  # type: ignore
         self,
         arr: jax.Array,
         mask: npt.ArrayLike,

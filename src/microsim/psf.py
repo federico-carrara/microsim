@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import logging
 import os
-from functools import cache, lru_cache
+from functools import cache
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -10,11 +11,9 @@ import tqdm
 
 from microsim.schema.backend import NumpyAPI
 from microsim.schema.lens import ObjectiveKwargs, ObjectiveLens
-from microsim.schema.settings import Settings
 from microsim.util import microsim_cache
 
 from ._data_array import ArrayProtocol
-from ._logger import logger
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -131,7 +130,7 @@ def vectorial_rz(
     simpson_integral = simpson(
         p, theta, constJ, xp.asarray(zv), ci, zpos, wave_num, xp=xp
     )
-    return 8.0 * np.pi / 3.0 * simpson_integral * (step / ud) ** 2  # type: ignore[no-any-return]
+    return 8.0 * np.pi / 3.0 * simpson_integral * (step / ud) ** 2
 
 
 def radius_map(
@@ -323,7 +322,7 @@ def make_confocal_psf(
     # The final PSF is the excitation PSF multiplied by the effective emission PSF.
     out = xp.asarray(ex_psf) * eff_em_psf
     out = _norm_psf(out, normalize, xp)
-    return out
+    return out  # type: ignore [no-any-return]
 
 
 def _norm_psf(
@@ -396,7 +395,7 @@ def make_psf(
 
 
 # variant of make_psf that only accepts hashable arguments
-@lru_cache(maxsize=Settings().cache.in_mem_size.psf)
+@cache
 def cached_psf(
     nz: int,
     nx: int,
@@ -425,15 +424,9 @@ def cached_psf(
             nz, nx, dz, dx, em_wvl_um, pinhole_au, ex_wvl_um, objective
         )
         if cache_path.exists():
-            logger.info(
-                f"Found cached PSF {nz=} {nx=} {dz=} {dx=} "
-                f"{ex_wvl_um=:.2f} {pinhole_au=}"
-            )
+            logging.info("Using cached PSF: %s", cache_path)
             return xp.asarray(np.load(cache_path))
 
-    logger.info(
-        f"Creating new PSF {nz=} {nx=} {dz=} {dx=} {ex_wvl_um=:.2f} {pinhole_au=}"
-    )
     if pinhole_au is None:
         psf = vectorial_psf_centered(
             wvl=em_wvl_um,
