@@ -134,7 +134,10 @@ class OpticalConfig(SimBaseModel):
                 em_spectrum = em_spectrum * detector_qe
             em_array = em_spectrum.as_xarray()
 
-        final = self.total_emission_rate(fluorophore) * em_array
+        em_rate = self.total_emission_rate(fluorophore)
+        if isinstance(em_array, xr.DataArray):
+            em_rate, em_array = xr.align(em_rate, em_array, join="outer", fill_value=0)
+        final = em_rate * em_array
         final.name = "filtered_emission_rate"
         final.attrs["long_name"] = "Filtered Emission rate"
         final.attrs["units"] = "photons/s"
