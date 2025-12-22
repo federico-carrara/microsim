@@ -229,7 +229,9 @@ class Identity(_PSFModality):
         )
         return em_image
 
-
+# FIXME: if the spectrum has one or less wavelengths after masking, this fails.
+# It is the case when for a certain FP the emission is zero for a given emission
+# channel and the thresholding removes all wavelengths.
 def bin_spectrum(
     spectrum: xrDataArray,
     bins: int | np.ndarray = 3,
@@ -248,9 +250,9 @@ def bin_spectrum(
                 "Only threshold_percentage will be used.",
                 stacklevel=2,
             )
-        mask = spectrum.values > (threshold_percentage * spectrum.values.max() / 100)
+        mask = spectrum.values >= (threshold_percentage * spectrum.values.max() / 100)
     elif threshold_intensity is not None:
-        mask = spectrum.values > threshold_intensity
+        mask = spectrum.values >= threshold_intensity
     else:
         mask = slice(None)
     masked = spectrum[mask]
