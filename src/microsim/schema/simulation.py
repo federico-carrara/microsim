@@ -1,5 +1,6 @@
-import logging
+import time
 import warnings
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -10,6 +11,7 @@ from annotated_types import MinLen
 from pydantic import AfterValidator, Field, field_validator, model_validator
 
 from microsim._data_array import ArrayProtocol, from_cache, to_cache
+from microsim._logger import logger, logging_indented
 from microsim.util import microsim_cache
 
 from ._base_model import SimBaseModel
@@ -133,6 +135,9 @@ class Simulation(SimBaseModel):
         >>> truth.isel(f=0).max('z').plot()  # plot max projection of first fluorophore
         >>> plt.show()
         """
+        logger.info(f"Creating ground truth (shape ={self.truth_space.shape}) + ")
+        _t0 = time.perf_counter()
+
         if not hasattr(self, "_ground_truth"):
             xp = self._xp
 
@@ -165,6 +170,7 @@ class Simulation(SimBaseModel):
                         if self.settings.cache.write and cache_path:
                             to_cache(data, cache_path, dtype=np.uint16)
 
+                    label_data.append(data)
                     label_data.append(data)
 
                 # concat along the F axis
@@ -297,14 +303,18 @@ class Simulation(SimBaseModel):
         NOTE: the input `optical_image` can only contain a fluorophore dimension (e.g.,
         it can be the output of `optical_image_per_fluor()`).
         """
+        _t0 = time.perf_counter()
+        logger.info("Creating digital_image ...")
+
         if optical_image is None:
             optical_image = self.optical_image()
         image = optical_image  # (S, C, [F], Z, Y, X)
 
-        # downscale to output space
+        # rescale to output space
         # TODO: consider how we would integrate detector pixel size
-        # rather than a user-sepicified output space
+        # rather than a user-specified output space
         if self.output_space is not None:
+            logger.info(f"Rescaling to output space {self.output_space.shape}")
             image = self.output_space.rescale(image)
 
         # simulate detector
@@ -322,6 +332,7 @@ class Simulation(SimBaseModel):
             ch_exposures = exposure_ms
 
         if self.detector is not None and with_detector_noise:
+            logger.info(f"Simulating {type(self.detector).__name__} detector ...")
             image = self.detector.render(image, exposure_ms=ch_exposures, xp=self._xp)
             image.attrs.update(units="gray values")
         else:
@@ -351,8 +362,8 @@ class Simulation(SimBaseModel):
             return None
 
         truth_cache = Path(microsim_cache("ground_truth"), *lbl_path)
-        shape = f'shape{"_".join(str(x) for x in truth_space.shape)}'
-        scale = f'scale{"_".join(str(x) for x in truth_space.scale)}'
+        shape = f"shape{'_'.join(str(x) for x in truth_space.shape)}"
+        scale = f"scale{'_'.join(str(x) for x in truth_space.scale)}"
         conc = f"conc{label.concentration}"
         truth_cache = truth_cache / shape / scale / conc
         if hasattr(label.distribution, "is_random") and label.distribution.is_random():
@@ -364,14 +375,24 @@ class Simulation(SimBaseModel):
             return
         if hasattr(result.data, "get"):
             result = result.copy(data=result.data.get(), deep=False)
-        result.attrs = {"microsim.Simulation": self.model_dump_json()}
+        with suppress(Exception):
+            try:
+                sim_data = self.model_dump_json()
+            except PydanticSerializationError:
+                sim_data = self.model_dump_json(exclude={"sample"})
+            result.attrs = {"microsim.Simulation": sim_data}
         result.coords[Axis.C] = [c.name for c in result.coords[Axis.C].values]
         if self.output_path.suffix == ".zarr":
             result.to_zarr(self.output_path, mode="w")
         elif self.output_path.suffix in (".nc",):
             result.to_netcdf(self.output_path)
         elif self.output_path.suffix in (".tif", ".tiff"):
-            import tifffile as tf
+            try:
+                import tifffile as tf
+            except ImportError as e:
+                raise ImportError(
+                    "Please `pip install microsim[io]` to write TIFF files."
+                ) from e
 
             tf.imwrite(self.output_path, np.asanyarray(result))
 
@@ -390,7 +411,12 @@ class Simulation(SimBaseModel):
 def plot_simulation_summary(
     sim: Simulation, transpose: bool = False, legend: bool = True
 ) -> None:
-    import matplotlib.pyplot as plt
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as e:
+        raise ImportError(
+            "Please `pip install microsim[view]` to use plotting/viewing functions."
+        ) from e
 
     nrows = 5
     ncols = len(sim.channels)

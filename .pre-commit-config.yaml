@@ -5,25 +5,24 @@ ci:
 
 repos:
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.23
+    rev: v0.24.1
     hooks:
       - id: validate-pyproject
 
-  - repo: https://github.com/crate-ci/typos
-    rev: typos-dict-v0.11.37
+  - repo: https://github.com/adhtruong/mirrors-typos
+    rev: v1.35.5
     hooks:
       - id: typos
         args: [--force-exclude]  # omitting --write-changes
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.1
+    rev: v0.12.11
     hooks:
-      - id: ruff
-        args: [--fix, --unsafe-fixes]
+      - id: ruff-check
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.13.0
+    rev: v1.17.1
     hooks:
       - id: mypy
         files: "^src/"
@@ -35,3 +34,5 @@ repos:
           - types-tqdm
           - pint
           - platformdirs
+          - types-requests
+          - fpbase

@@ -14,12 +14,14 @@ import tqdm
 from scipy import signal
 
 from ._data_array import ArrayProtocol, DataArray, xrDataArray
+from .schema.dimensions import Axis
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping, Sequence
     from pathlib import Path
     from typing import Literal
 
+    from cmap._colormap import ColorStopsLike
     from numpy.typing import DTypeLike, NDArray
 
     ShapeLike = Sequence[int]
@@ -168,7 +170,7 @@ def get_fftconvolve_shape(
         final_shape = full_shape
 
     else:
-        raise ValueError("Acceptable mode flags are 'valid'," " 'same', or 'full'")
+        raise ValueError("Acceptable mode flags are 'valid', 'same', or 'full'")
     return final_shape
 
 
@@ -260,8 +262,13 @@ def ortho_plot(
     z: int | None = None,
 ) -> None:
     """Plot XY and XZ slices of a 3D array."""
-    import matplotlib.pyplot as plt
-    from matplotlib.colors import LinearSegmentedColormap
+    try:
+        import matplotlib.pyplot as plt
+        from matplotlib.colors import LinearSegmentedColormap
+    except ImportError as e:
+        raise ImportError(
+            "Please `pip install microsim[view]` to use plotting/viewing functions."
+        ) from e
 
     if isinstance(img, xrDataArray):
         img = img.data
@@ -365,22 +372,19 @@ def ortho_plot(
         plt.show()
 
 
-def ndview(ary: Any, cmap: Any | None = None) -> None:
+def ndview(ary: Any, cmap: ColorStopsLike | None = None) -> None:
     """View any array using ndv.imshow.
 
     This function is a thin wrapper around `ndv.imshow`.
     """
     try:
         import ndv
-        import qtpy
-        import vispy.app
     except ImportError as e:
         raise ImportError(
-            "Please `pip install 'ndv[pyqt,vispy]' to use this function."
+            "Please `pip install microsim[view]` to use plotting/viewing functions."
         ) from e
 
-    vispy.use(qtpy.API_NAME)
-    ndv.imshow(ary, cmap=cmap)
+    ndv.imshow(ary, default_lut={"cmap": cmap or "gray"})
 
 
 ArrayType = TypeVar("ArrayType", bound=ArrayProtocol)
@@ -440,4 +444,97 @@ def http_get(url: str, params: dict | None = None) -> bytes:
             raise HTTPError(
                 url, response.getcode(), "HTTP request failed", response.headers, None
             )
-        return cast(bytes, response.read())
+        return cast("bytes", response.read())
+
+
+def _colorize(
+    ary: xrDataArray,
+    colormaps: Sequence[ColorStopsLike] = (),
+) -> np.ndarray:
+    """Colorize a 3D array using the provided colormaps."""
+    from cmap import Colormap
+
+    if not colormaps:
+        colormaps = ["green", "magenta", "cyan", "yellow", "red", "blue"]
+    n_channels = ary.sizes[Axis.C]
+    if len(colormaps) != n_channels:
+        colormaps = colormaps[:n_channels]
+
+    colorized = []
+    for i, cmap in enumerate(colormaps):
+        # convert to 8 bit autoscaled:
+        data = ary.isel({Axis.C: i})
+        data = data - np.min(data)
+        data = data / np.max(data)
+        colorized.append(Colormap(cmap)(np.clip(data, 0, 1)))
+
+    # add them all together
+    summed = np.sum(np.stack(colorized), axis=0)[..., :3]  # drop alpha channel
+    return (summed * 255).astype(np.uint8)  # type: ignore
+
+
+def animate(
+    ary: xrDataArray,
+    output_path: Path | str,
+    *,
+    fps: float = 5.0,
+    crf: int = 18,
+    preset: str = "slow",
+    colormaps: Sequence[ColorStopsLike] = (),
+    upsize: int | None = None,
+) -> None:
+    """Output an mp4 animating a 3D array.
+
+    Parameters
+    ----------
+    ary : Any
+        The array to animate.
+    output_path : Path or str
+        The path to save the animation.
+    fps : int, optional
+        Frames per second, by default 4
+    crf : int, optional
+        Constant Rate Factor for libx264 (0-51, where lower = better quality) Default
+        18.
+    preset : str, optional
+        Encoding preset for libx264.
+    colormaps : Sequence[ColorStopsLike], optional
+        List of colormaps to use for each channel, by default (green, magenta, cyan,
+        yellow, red, blue)
+    upsize : int, optional
+        If provided, upsize the Y and X dimensions by this factor (nearest
+        neighbor).
+    """
+    try:
+        import imageio
+    except ImportError as e:
+        raise ImportError(
+            "Please `pip install microsim[io]` to use extra reading/writing functions."
+        ) from e
+
+    volume = _colorize(ary, colormaps)
+    if upsize:
+        # upsize just the Y and X dimensions
+        volume = np.repeat(volume, upsize, axis=-3)
+        volume = np.repeat(volume, upsize, axis=-2)
+
+    # prepare writer
+    writer = imageio.get_writer(
+        str(output_path),
+        fps=fps,
+        codec="libx264",
+        ffmpeg_params=[
+            "-crf",
+            str(crf),
+            "-preset",
+            preset,
+            "-pix_fmt",
+            "yuv420p",  # ensures broad compatibility
+        ],
+    )
+
+    # append each Z-slice as a frame
+    for frame in volume:
+        writer.append_data(frame)
+
+    writer.close()

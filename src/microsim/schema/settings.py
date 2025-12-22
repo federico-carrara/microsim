@@ -10,9 +10,25 @@ from ._base_model import SimBaseModel
 from .backend import BackendName, DeviceName, NumpyAPI
 
 
+class InMemoryCacheSizes(SimBaseModel):
+    """Parameters that control the in-memory cache size of various cached functions."""
+
+    psf: int = Field(
+        default=64,
+        description=(
+            "The maximum number of PSFs that will be stored in the in-memory cache, "
+            "which follows the LRU caching strategy. Note, this setting will only take "
+            "effect by modifying the equivalent environment variable prior to "
+            "importing microsim."
+        ),
+        frozen=True,
+    )
+
+
 class CacheSettings(SimBaseModel):
     read: bool = True
     write: bool = True
+    in_mem_size: InMemoryCacheSizes = Field(default_factory=InMemoryCacheSizes)
 
     @model_validator(mode="before")
     @classmethod
@@ -28,7 +44,7 @@ class Settings(SimBaseModel, BaseSettings):
     np_backend: BackendName = "auto"
     device: DeviceName = "auto"
     float_dtype: FloatDtype = Field(
-        "float32",  # type: ignore
+        "float32",  # type: ignore[arg-type]
         description="Floating-point precision to use for simulations.",
     )
     random_seed: int | None = Field(

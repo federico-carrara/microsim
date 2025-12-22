@@ -82,9 +82,7 @@ class _Camera(SimBaseModel):
         self, total_electrons: npt.NDArray, xp: NumpyAPI
     ) -> npt.NDArray:
         voltage = xp.norm_rvs(total_electrons, self.read_noise) * self.gain
-        return xp.maximum(
-            xp.round((voltage / self.adc_gain) + self.offset), 0
-        )  # type: ignore
+        return xp.maximum(xp.round((voltage / self.adc_gain) + self.offset), 0)  # type: ignore
 
     def apply_post_quantization_binning(
         self, gray_values: npt.NDArray, binning: int, mode: str = "sum"
@@ -155,7 +153,7 @@ class _Camera(SimBaseModel):
         else:
             output = gray_values.astype("uint8")
 
-        return output
+        return output  # type: ignore[no-any-return]
 
     @property
     def dynamic_range(self) -> float:
