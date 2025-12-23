@@ -152,21 +152,13 @@ class CosemLabel(BaseDistribution):
         patches: list[np.ndarray] = []
         for pos in tqdm(positions):
             # translate origin of coords to pos
-            data = data.translate_to[pos]
+            trans = tuple(-p for p in pos)
+            data_at_pos = data.translate_to[trans]
             
-            # check if position is valid
-            dmin = data.domain.inclusive_min
-            dmax = data.domain.inclusive_max
-            assert all([
-                abs(p) + s <= dm + 1 for p, s, dm in zip(pos, space.shape, dmax)
-            ]), f"Requested position is out of bounds: pos={pos}, space.shape={space.shape}, dmax={dmax}"
-            assert all([
-                abs(p) >= d - 1 for p, d in zip(pos, dmin)
-            ]), f"Requested position is out of bounds: pos={pos}, dmin={dmin}"
-
             # crop to space size from new origin
-            slc = tuple(slice(p, p + s) for s, p in zip(space.shape, pos))
-            extracted = xp.asarray(data[slc].read().result()).astype(space.dtype)
+            # NOTE: crop from origin, so no centering logic here
+            slc = tuple(slice(0, s) for s in space.shape)
+            extracted = xp.asarray(data_at_pos[slc].read().result()).astype(space.dtype)
             patches.append(extracted)
         
         return np.stack(patches, axis=0)
