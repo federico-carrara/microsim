@@ -125,3 +125,48 @@ class CosemLabel(BaseDistribution):
             )
             extracted = xp.pad(extracted, pad, mode="constant")
         return space + extracted
+
+    def multi_render(
+        self,
+        space: "xrDataArray",
+        positions: list[tuple[int, int, int]],
+        xp: NumpyAPI | None = None,
+    ) -> np.ndarray:
+        """Render multiple data more efficiently than calling render repeatedly."""
+        from tqdm import tqdm
+        assert positions is not None, "positions must be provided for multi_render."
+        
+        xp = xp or NumpyAPI()
+        
+        truth_space = cast("Space", space.attrs["space"])
+        scale = [round(x / 0.004, 4) for x in truth_space.scale]
+        if any(x % 1.0 for x in scale):
+            raise ValueError("Only 0.004 um/px multiples are currently supported")
+
+        # scale now represents how many times larger than 4nm/px the truth space is
+        # we need to get the appropriate resolution level from the cosem image
+        # where lvl 0 is 4nm/px, lvl 1 is 8nm/px, etc...
+        cosem_level = int(np.log2(max(scale)))
+        data = self.cosem_image.read(level=cosem_level, bin_mode="auto")
+
+        patches: list[np.ndarray] = []
+        for pos in tqdm(positions):
+            # translate origin of coords to pos
+            data = data.translate_to[pos]
+            
+            # check if position is valid
+            dmin = data.domain.inclusive_min
+            dmax = data.domain.inclusive_max
+            assert all([
+                abs(p) + s <= dm + 1 for p, s, dm in zip(pos, space.shape, dmax)
+            ]), f"Requested position is out of bounds: pos={pos}, space.shape={space.shape}, dmax={dmax}"
+            assert all([
+                abs(p) >= d - 1 for p, d in zip(pos, dmin)
+            ]), f"Requested position is out of bounds: pos={pos}, dmin={dmin}"
+
+            # crop to space size from new origin
+            slc = tuple(slice(p, p + s) for s, p in zip(space.shape, pos))
+            extracted = xp.asarray(data[slc].read().result()).astype(space.dtype)
+            patches.append(extracted)
+        
+        return np.stack(patches, axis=0)
