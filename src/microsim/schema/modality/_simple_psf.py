@@ -270,7 +270,7 @@ def bin_spectrum(
         if min_bin_length and bin_length < min_bin_length:
             num_bins = int(w_range / min_bin_length)
             bin_length = w_range / num_bins
-        bins = np.linspace(w_min, w_max, num_bins + 1)
+        bins = np.linspace(w_min.values, w_max.values, num_bins + 1)
 
     # Use groupby_bins to bin the data within the filtered region
     binned = masked.groupby_bins(Axis.W, bins=bins)
