@@ -19,6 +19,18 @@ if os.path.exists(RED_HAT_CA) and "TENSORSTORE_CA_BUNDLE" not in os.environ:
 
 import tensorstore as ts  # noqa: E402
 
+_TS_CONTEXTS: dict[float | None, ts.Context] = {}
+
+
+def _get_ts_context(cache_limit: float | None) -> ts.Context | None:
+    if cache_limit is None:
+        return None
+    ctx = _TS_CONTEXTS.get(cache_limit)
+    if ctx is None:
+        ctx = ts.Context({"cache_pool": {"total_bytes_limit": cache_limit}})
+        _TS_CONTEXTS[cache_limit] = ctx
+    return ctx
+
 if TYPE_CHECKING:
     from .models import CosemImage
 
@@ -62,9 +74,8 @@ def read_tensorstore(
     """
     level = level or 0
     spec = ts_spec(img, level=level, bin_mode=bin_mode)
-    if cache_limit:
-        spec["context"] = {"cache_pool": {"total_bytes_limit": cache_limit}}
-    data = ts.open(spec).result()
+    ctx = _get_ts_context(cache_limit)
+    data = ts.open(spec, context=ctx).result()
 
     # "squeeze" the data (haven't found a tensorstore-native way to do this)
     # usually this is because of a single "channels" dim in precomputed formats.
