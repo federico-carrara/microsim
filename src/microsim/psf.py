@@ -395,7 +395,14 @@ def make_psf(
 
 
 # variant of make_psf that only accepts hashable arguments
-@cache
+# FIXME: unbounded cache growth
+# Specifically:
+# - line 433 -> `np.load(cache_path)` allocates a large numpy array
+# - Because of the @cache decorator, this array is kept in RAM forever
+# The problem is if any parameter of the function changes: in that case @cache is
+# triggered every time, and a new large numpy array is allocated and kept in memory.
+# E.g., `objective` object changes over different calls
+# @cache
 def cached_psf(
     nz: int,
     nx: int,
