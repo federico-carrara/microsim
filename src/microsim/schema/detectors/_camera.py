@@ -150,7 +150,7 @@ class _Camera(SimBaseModel):
         gray_values = xp.minimum(gray_values, self.max_intensity)
         if self.bit_depth > 16:
             output = gray_values.astype("uint32")
-        if self.bit_depth > 8:
+        elif self.bit_depth > 8:
             output = gray_values.astype("uint16")
         else:
             output = gray_values.astype("uint8")
