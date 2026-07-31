@@ -287,11 +287,16 @@ def bin_spectrum(
 
 
 def _pick_nx(
-    nx: int, dx: float, max_au_relative: float | None, ex_wvl_um: float, na: float
+    nx: int, dx: float, max_au_relative: float | None, em_wvl_nm: float, na: float
 ) -> int:
+    """Restrict the lateral PSF width to `max_au_relative` Airy radii.
+
+    `em_wvl_nm` is in nanometers (as are all wavelengths in this module), while
+    `dx` is in microns (as are all space scales).
+    """
     # now restrict nx to no more than max_au_relative
     if max_au_relative is not None:
-        airy_radius = 0.61 * ex_wvl_um / na
+        airy_radius = 0.61 * (em_wvl_nm * 1e-3) / na  # um
         n_pix_per_airy_radius = airy_radius / dx
         max_nx = int(n_pix_per_airy_radius * max_au_relative * 2)
         nx = min(nx, max_nx)
