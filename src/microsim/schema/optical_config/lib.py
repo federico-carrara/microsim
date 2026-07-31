@@ -135,7 +135,7 @@ def spectral_detector(
     lights = [
         LightSource.laser(laser, power) for laser, power in zip(lasers, laser_powers)
     ]
-    waves = np.arange(min_wave - 100, max_wave + 100, 1)
+    waves = np.arange(min(lasers) - 50, max_wave + 50, 1)
 
     # create fake bandpass ... could also be something like 80/20
     laser0, *rest = lasers
@@ -150,7 +150,7 @@ def spectral_detector(
     configs: list[OpticalConfig] = []
     edges = np.linspace(min_wave, max_wave, bins + 1)
     for i, (low, high) in enumerate(pairwise(edges)):
-        mask = (waves >= low) & (waves <= high)
+        mask = (waves >= low) & (waves < high)
         f = SpectrumFilter(
             transmission=Spectrum(wavelength=waves, intensity=mask),
             placement=Placement.EM_PATH,
