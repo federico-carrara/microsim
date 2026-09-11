@@ -162,3 +162,128 @@ def spectral_detector(
         )
         configs.append(oc)
     return configs
+
+
+def leica_stellaris_detector(
+    bands: Sequence[tuple[float, float]],
+    lasers: Sequence[float],
+    laser_powers: Sequence[float],
+    notch_width: float = 10,
+) -> list[OpticalConfig]:
+    """Create the optical configs of a Leica-like confocal (e.g. SP8/Stellaris).
+
+    Each detection band iss one optical config.
+    All bands are acquired simultaneously, so every band sees every laser.
+    A notch around each laser line keeps laser light out of the emission path.
+    This generalises `spectral_detector` to explicit, arbitrary band edges.
+
+    Parameters
+    ----------
+    bands : Sequence[tuple[float, float]]
+        Detection bands as ``(start, end)`` wavelengths in nm, with ``start``
+        included and ``end`` excluded. Bands must be in ascending order and must not
+        overlap. Adjacent bands, where one band's ``end`` equals the next band's
+        ``start``, are allowed.
+    lasers : Sequence[float]
+        Laser wavelengths in nm.
+    laser_powers : Sequence[float]
+        Power of each laser in W/cm^2, in the same order as `lasers`.
+    notch_width : float, optional
+        Width in nm of the notch around each laser line, by default 10.
+
+    Returns
+    -------
+    list[OpticalConfig]
+        One optical config per band, in the order of `bands`. Each config has all
+        the lasers, the notch filter (shared by all configs) and the band's emission
+        filter.
+
+    Raises
+    ------
+    ValueError
+        If `bands` or `lasers` is empty, if `lasers` and `laser_powers` differ in
+        length, if a band has ``start >= end``, or if the bands are not in ascending
+        order or overlap.
+
+    Notes
+    -----
+    `OpticalConfig.irradiance` normalises the summed laser spectrum to an area of 1
+    and then multiplies it by `OpticalConfig.power`. Each config's power is set to
+    ``sum(laser_powers)``, so each laser delivers its own power in W/cm^2.
+
+    Examples
+    --------
+    Three bands, excited by lasers at 488, 561 and 638 nm.
+
+    >>> configs = leica_optical_configs(
+    ...     bands=[(500, 550), (570, 620), (650, 750)],
+    ...     lasers=[488, 561, 638],
+    ...     laser_powers=[1, 1, 1],
+    ... )
+    >>> [oc.name for oc in configs]
+    ['Band 0 [500-550 nm]', 'Band 1 [570-620 nm]', 'Band 2 [650-750 nm]']
+    """
+    if len(bands) == 0:
+        raise ValueError("`bands` must contain at least one band.")
+    if len(lasers) == 0:
+        raise ValueError("`lasers` must contain at least one laser.")
+    if len(lasers) != len(laser_powers):
+        raise ValueError(
+            "`lasers` and `laser_powers` must have the same length, got "
+            f"{len(lasers)} and {len(laser_powers)}."
+        )
+    for lo, hi in bands:
+        if lo >= hi:
+            raise ValueError(f"Band start must be smaller than end, got ({lo}, {hi}).")
+    for (prev_lo, prev_hi), (lo, hi) in pairwise(bands):
+        if lo < prev_lo:
+            raise ValueError(
+                "`bands` must be in ascending order, got "
+                f"({prev_lo}, {prev_hi}) before ({lo}, {hi})."
+            )
+        if lo < prev_hi:
+            raise ValueError(
+                f"Bands must not overlap, got ({prev_lo}, {prev_hi}) and ({lo}, {hi})."
+            )
+
+    waves = np.arange(
+        min(min(lasers), bands[0][0]) - 50, max(max(lasers), bands[-1][1]) + 50, 1
+    )
+    lights = [
+        LightSource.laser(wl, p) for wl, p in zip(lasers, laser_powers, strict=True)
+    ]
+
+    # AOBS-like notch around every laser line. The product (rather than the sum used
+    # in `spectral_detector`) keeps transmission in [0, 1] when notches overlap.
+    notch = SpectrumFilter(
+        transmission=Spectrum(
+            wavelength=waves,
+            intensity=np.prod(
+                [
+                    1 - bandpass(waves, center=wl, bandwidth=notch_width)
+                    for wl in lasers
+                ],
+                axis=0,
+            ),
+        ),
+        placement=Placement.BS,
+    )
+
+    configs: list[OpticalConfig] = []
+    for i, (lo, hi) in enumerate(bands):
+        band_filter = SpectrumFilter(
+            transmission=Spectrum(
+                wavelength=waves,
+                intensity=((waves >= lo) & (waves < hi)).astype(float),
+            ),
+            placement=Placement.EM_PATH,
+        )
+        configs.append(
+            OpticalConfig(
+                name=f"Band {i} [{lo:g}-{hi:g} nm]",
+                lights=lights,
+                filters=[notch, band_filter],
+                power=sum(laser_powers),
+            )
+        )
+    return configs
