@@ -172,7 +172,7 @@ def leica_stellaris_detector(
 ) -> list[OpticalConfig]:
     """Create the optical configs of a Leica-like confocal (e.g. SP8/Stellaris).
 
-    Each detection band iss one optical config.
+    Each detection band is one optical config.
     All bands are acquired simultaneously, so every band sees every laser.
     A notch around each laser line keeps laser light out of the emission path.
     This generalises `spectral_detector` to explicit, arbitrary band edges.
@@ -215,7 +215,7 @@ def leica_stellaris_detector(
     --------
     Three bands, excited by lasers at 488, 561 and 638 nm.
 
-    >>> configs = leica_optical_configs(
+    >>> configs = leica_stellaris_detector(
     ...     bands=[(500, 550), (570, 620), (650, 750)],
     ...     lasers=[488, 561, 638],
     ...     laser_powers=[1, 1, 1],
