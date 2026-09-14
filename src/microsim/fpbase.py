@@ -156,7 +156,7 @@ def _fpbase_query(query: str, max_attempts: int = 10, wait_time: float = 0.5) ->
     for attempt in range(1, max_attempts + 1):
         try:
             req = Request(FPBASE_URL, data=data, headers=headers)
-            with urlopen(req, timeout=10) as response:
+            with urlopen(req, timeout=30) as response:
                 if response.status != 200:
                     raise RuntimeError(f"HTTP status {response.status}")
                 return response.read()  # type: ignore
