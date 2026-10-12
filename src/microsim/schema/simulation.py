@@ -71,6 +71,10 @@ class Simulation(SimBaseModel):
     # Per-pixel integration time: camera exposure, or pixel dwell time for
     # point-scanning modalities (e.g. Confocal). May be renamed `integration_time`.
     exposure_ms: float = 100
+    # Mean number of stray photons (ambient light, scattered laser, ...) detected per
+    # output pixel per second of integration time, in every channel. They are spatially
+    # uniform, unrelated to the sample, and go through the detector like the signal.
+    stray_photons_rate: float = Field(0, ge=0)
     settings: Settings = Field(default_factory=Settings)
     output_path: OutPath | None = None
 
@@ -363,6 +367,11 @@ class Simulation(SimBaseModel):
                 else [Axis.Z]
             )
             image = self.output_space.rescale(image, mean_axes=mean_axes)
+
+        # stray photons: added per output pixel and before the detector, 
+        # which adds their shot noise
+        if self.stray_photons_rate:
+            image = image + self.stray_photons_rate
 
         # simulate detector
         # NOTE: exposure is a per-pixel integration time (camera exposure, or pixel

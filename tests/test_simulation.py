@@ -308,3 +308,29 @@ def test_identity_modality_backend_conversion(np_backend: ms.BackendName) -> Non
     assert result.shape[1:] == sim.truth_space.shape
     flux = sim.emission_flux()
     assert flux.shape[2:] == sim.truth_space.shape
+
+
+@pytest.mark.parametrize("downscale", [1, 2])
+def test_stray_photons(downscale: int) -> None:
+    """Stray photons are a uniform Poisson rate per output pixel, without a sample."""
+    truth = np.zeros((1, 64, 64))
+    sim = ms.Simulation(
+        truth_space=ms.ShapeScaleSpace(shape=truth.shape, scale=(0.1, 0.1, 0.1)),
+        output_space={"downscale": (1, downscale, downscale)},
+        sample=ms.Sample(labels=[ms.FluorophoreDistribution.from_array(truth)]),
+        modality=ms.Identity(),
+        detector=ms.CameraCCD(
+            read_noise=0, dark_current=0, offset=0, bit_depth=32, full_well=10**9,
+            electrons_per_adu=1,
+        ),
+        exposure_ms=1000,
+        stray_photons_rate=100,
+        settings=ms.Settings(random_seed=0),
+    )
+    out = np.asarray(sim.digital_image())
+    assert np.mean(out) == pytest.approx(100, rel=0.02)
+    assert np.var(out) == pytest.approx(100, rel=0.1)
+
+    # without detector noise: the expected number of photons
+    noiseless = np.asarray(sim.digital_image(with_detector_noise=False))
+    np.testing.assert_allclose(noiseless, 100)
