@@ -125,3 +125,32 @@ def test_cosem_simulation() -> None:
     )
 
     sim.run()
+
+
+class _FakeCosemImage:
+    content_type = "prediction"
+
+    def __init__(self, data: np.ndarray) -> None:
+        self.data = data
+
+    def read(self, level: int = 0, bin_mode: str = "auto") -> ts.TensorStore:
+        return ts.array(self.data)
+
+
+def test_cosem_label_position(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = np.arange(8**3, dtype=np.float32).reshape(8, 8, 8)
+    fake = _FakeCosemImage(data)
+    monkeypatch.setattr(ms.CosemLabel, "cosem_image", property(lambda self: fake))
+
+    # `position` is where the image's first voxel lands, relative to the center of
+    # the truth space. tensorstore only accepts integer indices.
+    label = ms.CosemLabel(dataset="fake", label="fake", position=(-3, -2, -4))
+    assert label.position == (-3, -2, -4)
+    assert all(isinstance(p, int) for p in label.position)
+    with pytest.raises(ValueError):
+        ms.CosemLabel(dataset="fake", label="fake", position=(-2.5, -2, -2))
+
+    # the truth space spans [-2, 2) around its center
+    space = ms.ShapeScaleSpace(shape=(4, 4, 4), scale=(0.004, 0.004, 0.004))
+    truth = space.create()
+    np.testing.assert_array_equal(label.render(truth), data[1:5, 0:4, 2:6])
