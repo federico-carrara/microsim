@@ -36,7 +36,7 @@ class CosemLabel(BaseDistribution):
     dataset: str
     label: str
     # position None implies crop to center
-    position: tuple[float, float, float] | None = None
+    position: tuple[int, int, int] | None = None
 
     def cache_path(self) -> tuple[str, ...] | None:
         if self.position:
